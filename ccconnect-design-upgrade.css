@@ -1,0 +1,99 @@
+/* CCConnect visual refresh — paste this immediately BEFORE </style> in index.html.
+   CSS only: preserves all existing Supabase/auth/messaging JavaScript. */
+:root {
+  --bg-color: #0b1020;
+  --card-bg: rgba(22, 30, 51, .88);
+  --text-main: #f4f7ff;
+  --text-muted: #9ba9c4;
+  --accent: #7c6cff;
+  --accent-hover: #6654f4;
+  --sidebar-width: 310px;
+  --line: rgba(173, 187, 220, .13);
+  --surface: #121a2d;
+}
+* { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body {
+  background-color: var(--bg-color);
+  background-image: radial-gradient(ellipse at 12% 0%, rgba(124,108,255,.15), transparent 38%),
+    radial-gradient(ellipse at 90% 8%, rgba(45,177,210,.09), transparent 32%);
+  color: var(--text-main);
+  letter-spacing: .005em;
+}
+button, input { transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-offset: 3px; }
+#auth-screen { position: relative; overflow: hidden; }
+.auth-card {
+  position: relative; padding: 42px; max-width: 430px;
+  background: linear-gradient(145deg, rgba(24,33,57,.96), rgba(14,20,37,.96));
+  border: 1px solid rgba(174,184,255,.2); border-radius: 24px;
+  box-shadow: 0 30px 100px rgba(0,0,0,.38), 0 0 0 8px rgba(124,108,255,.025);
+}
+.auth-card h1 { font-size: clamp(2.25rem, 6vw, 2.8rem); font-weight: 800; letter-spacing: -.075em; margin-bottom: 8px; }
+.auth-card h1::first-letter { color: #a69cff; }
+.auth-card p { color: var(--text-muted); line-height: 1.6; }
+.auth-card input, .modal input[type="text"] {
+  padding: 14px 15px; border-radius: 12px; border: 1px solid var(--line);
+  background: rgba(7,11,23,.65); color: var(--text-main);
+}
+.auth-card input:focus, .modal input[type="text"]:focus, .input-area input:focus {
+  border-color: rgba(166,156,255,.8); box-shadow: 0 0 0 4px rgba(124,108,255,.12); outline: none;
+}
+.auth-card button, .input-area button, .btn-primary {
+  background: linear-gradient(135deg, #897bff, #6654f4); color: white; border: 0;
+  box-shadow: 0 8px 24px rgba(102,84,244,.2); font-weight: 700;
+}
+.auth-card button { border-radius: 12px; padding: 14px; }
+.auth-card button:hover, .input-area button:hover, .btn-primary:hover { background: linear-gradient(135deg, #9b90ff, #7868ff); transform: translateY(-1px); }
+#app-screen { background: rgba(11,16,32,.92); }
+.sidebar { background: rgba(14,21,39,.97); border-right: 1px solid var(--line); }
+.sidebar-header { padding: 23px 20px; border-bottom-color: var(--line); }
+.sidebar-header h2 { font-size: 1.35rem; font-weight: 800; letter-spacing: -.055em; }
+.sidebar-header h2::first-letter { color: #a69cff; }
+.create-gc-btn { border-radius: 10px; border-color: rgba(166,156,255,.35); background: rgba(124,108,255,.13); padding: 9px 11px; }
+.create-gc-btn:hover { background: var(--accent); }
+.channel-section-title { padding: 21px 18px 9px; color: #7483a4; font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.channel-item { margin: 3px 9px; padding: 12px 12px; border-radius: 11px; font-size: .9rem; color: #aeb9d0; }
+.channel-item:hover { background: rgba(255,255,255,.045); color: white; }
+.channel-item.active { background: linear-gradient(90deg, rgba(124,108,255,.2), rgba(124,108,255,.07)); color: #d4ceff; border-right: 0; box-shadow: inset 3px 0 #8d80ff; }
+.empty-list { color: #6d7b98; }
+.sidebar-footer { border-top-color: var(--line); padding: 17px 18px; background: rgba(7,11,22,.25); }
+.user-info span { font-weight: 600; font-size: .88rem; }
+.logout-btn { padding: 7px 10px; border-radius: 8px; color: #ff9eae; }
+.logout-btn:hover { background: rgba(255,110,139,.1); }
+.chat-area { background: radial-gradient(ellipse at 50% 0%, rgba(34,45,79,.2), transparent 50%), #0b1020; }
+.chat-header { padding: 20px 26px; min-height: 78px; border-bottom-color: var(--line); background: rgba(13,19,35,.72); }
+.chat-header h3 { font-size: 1.04rem; font-weight: 750; letter-spacing: -.02em; }
+.header-btn { background: #1a2440; border: 1px solid var(--line); color: #dce3f6; padding: 9px 12px; border-radius: 10px; }
+.header-btn:hover { background: #253154; }
+#edit-name-btn { background: rgba(124,108,255,.13); border-color: rgba(166,156,255,.3); }
+#chat-status { color: #8d9cba; }
+.messages { padding: 28px clamp(16px, 4vw, 42px); gap: 14px; }
+.message { max-width: min(76%, 680px); padding: 12px 16px; border-radius: 17px; line-height: 1.55; box-shadow: 0 5px 16px rgba(0,0,0,.08); }
+.message.sent { background: linear-gradient(135deg, #8173ff, #6252e8); border-bottom-right-radius: 5px; }
+.message.received { background: #18223a; border: 1px solid rgba(172,187,220,.08); border-bottom-left-radius: 5px; }
+.msg-sender { color: #c5ccdf; font-weight: 700; letter-spacing: .015em; }
+.msg-time { color: rgba(235,239,255,.62); }
+.welcome { padding: 32px; max-width: 390px; border: 1px solid var(--line); background: rgba(20,29,50,.42); border-radius: 22px; }
+.input-area { padding: 18px clamp(12px, 3vw, 30px) 22px; border-top-color: var(--line); background: rgba(13,19,35,.75); }
+.input-area input { padding: 14px 18px; border-radius: 15px; border: 1px solid var(--line); background: #111a2e; }
+.input-area button { border-radius: 13px; padding: 0 23px; }
+.modal-overlay { background: rgba(3,6,15,.76); }
+.modal { background: linear-gradient(145deg, #1a2440, #11192d); border: 1px solid rgba(174,184,220,.17); border-radius: 20px; box-shadow: 0 25px 80px rgba(0,0,0,.45); padding: 27px; }
+.modal h3 { font-weight: 750; letter-spacing: -.025em; }
+.btn-cancel { border: 1px solid var(--line) !important; border-radius: 9px !important; }
+.btn-primary { border-radius: 9px !important; }
+@media (max-width: 720px) {
+  :root { --sidebar-width: 42%; }
+  .sidebar { max-width: 42%; }
+  .sidebar-header { padding: 14px 10px; }
+  .channel-item { margin: 2px 5px; padding: 10px 8px; }
+  .chat-header { padding: 12px; }
+  .messages { padding: 14px 10px; }
+  .message { max-width: 94%; padding: 10px 12px; }
+  .input-area { padding: 11px 9px max(12px, env(safe-area-inset-bottom)); }
+  .input-area button { padding: 0 14px; }
+  .auth-card { padding: 30px 22px; border-radius: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
