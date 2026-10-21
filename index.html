@@ -194,6 +194,48 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 
+
+/* CCConnect v2: searchable sidebar, browser notifications, media and popup chat */
+.sidebar-search-wrap { padding: 13px 14px 4px; }
+#sidebar-search { width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--line); background:#0b1222; color:var(--text-main); outline:none; }
+#sidebar-search:focus { border-color:rgba(166,156,255,.8); box-shadow:0 0 0 3px rgba(124,108,255,.12); }
+#notifications-toggle-btn { width:100%; margin-top:12px; text-align:left; }
+.sidebar-footer .user-info { gap:10px; }
+.channel-item { gap:10px; }
+.channel-icon { display:inline-flex; flex:0 0 28px; height:28px; border-radius:9px; align-items:center; justify-content:center; background:rgba(124,108,255,.11); font-size:.85rem; }
+.channel-title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.unread-badge { display:inline-flex; align-items:center; justify-content:center; min-width:21px; height:21px; padding:0 6px; border-radius:999px; background:#8b7cff; color:#fff; font-size:.72rem; font-weight:800; margin-left:auto; }
+.input-area { align-items:center; }
+.attach-media-btn { flex:0 0 44px; height:44px; padding:0 !important; border-radius:13px !important; font-size:1.45rem !important; line-height:1; background:#1a2440 !important; color:#dce3f6 !important; border:1px solid var(--line) !important; box-shadow:none !important; }
+.attach-media-btn:hover { background:#26345a !important; }
+#media-file-input { display:none; }
+.media-attachment { min-width:0; display:flex; flex-direction:column; gap:8px; }
+.media-image { display:block; max-width:min(100%,380px); max-height:360px; border-radius:12px; object-fit:contain; background:#080c17; }
+.media-video { display:block; width:min(100%,400px); max-height:340px; border-radius:12px; background:#05070d; }
+.media-audio { display:block; width:min(100%,360px); max-width:100%; }
+.media-file-link { display:inline-flex; align-items:center; gap:9px; color:#d9d3ff; background:rgba(124,108,255,.12); border:1px solid rgba(166,156,255,.22); border-radius:10px; padding:10px 12px; text-decoration:none; overflow-wrap:anywhere; }
+.media-file-link:hover { background:rgba(124,108,255,.22); }
+.media-meta { color:#9ba9c4; font-size:.75rem; }
+#app-toast { position:fixed; z-index:500; bottom:20px; left:50%; transform:translateX(-50%); max-width:min(90vw,500px); padding:12px 16px; border-radius:12px; background:#1d2845; color:#f4f7ff; border:1px solid rgba(166,156,255,.28); box-shadow:0 12px 40px rgba(0,0,0,.4); display:none; }
+body.popup-mode { display:block; height:100vh; min-height:0; overflow:hidden; }
+body.popup-mode #auth-screen { height:100vh; min-height:100vh; }
+body.popup-mode #app-screen { display:flex !important; width:100%; height:100vh; min-height:0; }
+body.popup-mode .sidebar { display:none !important; }
+body.popup-mode .chat-area { display:flex; flex:1 1 auto; width:100%; height:100%; min-height:0; min-width:0; }
+body.popup-mode #pip-btn { display:none !important; }
+body.popup-mode .chat-header { padding:14px 16px; min-height:62px; }
+body.popup-mode .messages { padding:18px; }
+body.popup-mode .input-area { padding:12px; }
+body.popup-mode .message { max-width:92%; }
+@media (max-width:720px) {
+  .sidebar-search-wrap { padding:10px 8px 2px; }
+  #sidebar-search { padding:9px 8px; font-size:.8rem; }
+  .channel-icon { flex-basis:24px; width:24px; height:24px; }
+  .channel-item { gap:7px; }
+  #notifications-toggle-btn { font-size:.72rem; padding:7px 8px; }
+  .attach-media-btn { flex-basis:38px; height:40px; }
+}
+
   </style>
 </head>
 <body>
@@ -214,6 +256,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
         <h2>ccconnect</h2>
         <button id="admin-gc-btn" class="create-gc-btn">+ New group</button>
       </div>
+      <div class="sidebar-search-wrap"><input type="search" id="sidebar-search" placeholder="Search people and groups…" aria-label="Search people and groups"></div>
       <div class="channel-list">
         <div class="channel-section-title">Direct Messages</div>
         <div id="dm-list"></div>
@@ -222,6 +265,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       </div>
       <div class="sidebar-footer">
         <div class="user-info"><span id="current-user-name">User</span><button id="logout-btn" class="logout-btn">Log out</button></div>
+        <button id="notifications-toggle-btn" class="header-btn" type="button" title="Enable browser notifications">🔔 Enable notifications</button>
       </div>
     </aside>
     <main class="chat-area">
@@ -229,10 +273,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
         <h3 id="current-channel-name">Select a conversation</h3>
         <span id="chat-status" aria-live="polite"></span>
         <button id="edit-name-btn" class="header-btn">✏️ Nickname</button>
-        <button id="pip-btn" class="header-btn">Pop-out</button>
+        <button id="pip-btn" class="header-btn" type="button">↗ Pop-out</button>
       </div>
       <div class="messages" id="messages-container"><div class="welcome">Choose a conversation on the left to start messaging.</div></div>
       <form class="input-area" id="message-form">
+        <button id="attach-media-btn" class="attach-media-btn" type="button" aria-label="Attach a photo, video, audio or file" title="Attach media" disabled>＋</button>
+        <input id="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.txt,.doc,.docx" disabled>
         <input type="text" id="message-input" placeholder="Type a message…" maxlength="4000" autocomplete="off" disabled>
         <button id="send-btn" type="submit" disabled>Send</button>
       </form>
@@ -277,8 +323,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
     let activeMessageChannel = null;
     let sidebarChannel = null;
     let appStarting = false;
-    let nicknamesDB = {};
-    try { nicknamesDB = JSON.parse(localStorage.getItem('ccconnect_nicknames') || '{}') || {}; } catch { nicknamesDB = {}; }
+    let nicknamesDB = {}; // contact_id -> nickname, loaded from Supabase for this signed-in user
+    let groupsCache = [];
+    let unreadCounts = {};
+    const MEDIA_PREFIX = 'CCMEDIA1:';
+    const popupParams = new URLSearchParams(window.location.search);
+    const isPopupWindow = popupParams.get('ccpopup') === '1';
+    if (isPopupWindow) document.body.classList.add('popup-mode');
+    let notificationsEnabled = localStorage.getItem('ccconnect_notifications_enabled') === 'true';
+    let toastTimer = null;
 
     const $ = (id) => document.getElementById(id);
     const ADMIN_LABEL = 'Group creation is limited to the admin account.';
@@ -293,6 +346,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       $('admin-gc-btn').addEventListener('click', openGCModal);
       $('edit-name-btn').addEventListener('click', openNicknameModal);
       $('pip-btn').addEventListener('click', togglePiP);
+      $('attach-media-btn').addEventListener('click', () => $('media-file-input').click());
+      $('media-file-input').addEventListener('change', uploadSelectedMedia);
+      $('notifications-toggle-btn').addEventListener('click', toggleNotifications);
+      $('sidebar-search').addEventListener('input', () => renderSidebar(groupsCache));
+      if (isPopupWindow) { $('pip-btn').style.display = 'none'; document.title = 'CCConnect · Pop-out chat'; }
+      updateNotificationsButton();
       $('gc-cancel-btn').addEventListener('click', closeGCModal);
       $('gc-create-btn').addEventListener('click', createGroupChat);
       $('nick-cancel-btn').addEventListener('click', closeNicknameModal);
@@ -350,6 +409,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
         if (error || !profile) throw new Error('Your profile was not created. Run the setup SQL and make sure this account exists in Supabase Authentication.');
         authUser = user;
         currentProfile = profile;
+        await loadContactNicknames();
         $('auth-screen').style.display = 'none';
         $('app-screen').style.display = 'flex';
         $('current-user-name').textContent = profile.display_name || profile.email;
@@ -357,6 +417,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
         showAuthError('');
         await refreshSidebar();
         subscribeSidebar();
+        if (isPopupWindow) await restorePopupConversation();
       } catch (error) {
         showAuthError(error.message || 'Could not load your profile.');
         $('auth-screen').style.display = 'flex';
@@ -387,7 +448,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       $('chat-status').textContent = '';
       $('edit-name-btn').style.display = 'none';
       $('message-input').value = ''; $('message-input').disabled = true; $('send-btn').disabled = true;
+      $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
       $('dm-list').replaceChildren(); $('gc-list').replaceChildren();
+      unreadCounts = {}; nicknamesDB = {}; groupsCache = [];
     }
 
     async function refreshSidebar() {
@@ -399,7 +462,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       const { data: groups, error: groupError } = await supabase.from('conversations')
         .select('id,name,created_at').eq('type', 'group').order('created_at', { ascending: true });
       if (groupError) { setChatStatus('Could not load groups'); console.error(groupError); return; }
-      renderSidebar(groups || []);
+      groupsCache = groups || [];
+      renderSidebar(groupsCache);
     }
 
     function canShowDM(other) {
@@ -412,33 +476,50 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
     function renderSidebar(groups) {
       const dmList = $('dm-list'); const gcList = $('gc-list');
       dmList.replaceChildren(); gcList.replaceChildren();
-      const contacts = profilesCache.filter(canShowDM);
-      if (!contacts.length) dmList.appendChild(emptyText('No direct messages'));
+      const query = ($('sidebar-search')?.value || '').trim().toLowerCase();
+      const contacts = profilesCache.filter(canShowDM).filter(person => {
+        const label = getNickname(currentProfile?.email, person);
+        return !query || label.toLowerCase().includes(query) || (person.email || '').toLowerCase().includes(query);
+      });
+      if (!contacts.length) dmList.appendChild(emptyText(query ? 'No matching people' : 'No direct messages'));
       contacts.forEach((person) => {
         const item = document.createElement('div');
         item.className = `channel-item${currentDMOther?.id === person.id && currentChannelType === 'dm' ? ' active' : ''}`;
-        item.textContent = `💬 ${getNickname(currentProfile.email, person)}`;
         item.tabIndex = 0; item.setAttribute('role', 'button');
+        const icon = document.createElement('span'); icon.className = 'channel-icon'; icon.textContent = '✉';
+        const label = document.createElement('span'); label.className = 'channel-title'; label.textContent = getNickname(currentProfile?.email, person);
+        item.append(icon, label);
+        const unread = Object.values(unreadCounts).length ? unreadCountsForContact(person.id) : 0;
+        if (unread > 0) { const badge = document.createElement('span'); badge.className = 'unread-badge'; badge.textContent = unread > 99 ? '99+' : String(unread); item.appendChild(badge); }
         item.addEventListener('click', () => selectDM(person));
-        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') selectDM(person); });
+        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDM(person); } });
         dmList.appendChild(item);
       });
-      if (!groups.length) gcList.appendChild(emptyText('No group chats'));
-      groups.forEach((group) => {
+      const filteredGroups = (groups || []).filter(group => !query || (group.name || '').toLowerCase().includes(query));
+      if (!filteredGroups.length) gcList.appendChild(emptyText(query ? 'No matching groups' : 'No group chats'));
+      filteredGroups.forEach((group) => {
         const item = document.createElement('div');
         item.className = `channel-item${currentChannelId === group.id ? ' active' : ''}`;
-        item.textContent = `👥 ${group.name}`;
         item.tabIndex = 0; item.setAttribute('role', 'button');
+        const icon = document.createElement('span'); icon.className = 'channel-icon'; icon.textContent = '♧';
+        const label = document.createElement('span'); label.className = 'channel-title'; label.textContent = group.name || 'Group chat';
+        item.append(icon, label);
+        const unread = Number(unreadCounts[group.id] || 0);
+        if (unread > 0) { const badge = document.createElement('span'); badge.className = 'unread-badge'; badge.textContent = unread > 99 ? '99+' : String(unread); item.appendChild(badge); }
         item.addEventListener('click', () => selectGroup(group));
-        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') selectGroup(group); });
+        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectGroup(group); } });
         gcList.appendChild(item);
       });
     }
-
+    function unreadCountsForContact(contactId) {
+      // Direct-message conversation IDs are resolved by the RPC and aren't cached as a contact mapping,
+      // so the count remains on the conversation until opened; group counters are rendered directly.
+      return 0;
+    }
     function emptyText(text) { const el = document.createElement('div'); el.className = 'empty-list'; el.textContent = text; return el; }
     function getNickname(ownerEmail, otherProfile) {
-      const byOwner = nicknamesDB[ownerEmail] || {};
-      return byOwner[otherProfile.email] || otherProfile.display_name || otherProfile.email;
+      if (!otherProfile) return '';
+      return nicknamesDB[otherProfile.id] || otherProfile.display_name || otherProfile.email;
     }
     function setChatStatus(text) { $('chat-status').textContent = text || ''; }
 
@@ -460,10 +541,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
     async function activateChannel(channelId, title, type) {
       currentChannelId = channelId;
       currentChannelType = type;
+      unreadCounts[channelId] = 0;
       $('current-channel-name').textContent = title;
       $('edit-name-btn').style.display = type === 'dm' ? 'inline-block' : 'none';
       $('message-input').disabled = false;
       $('send-btn').disabled = false;
+      $('attach-media-btn').disabled = false; $('media-file-input').disabled = false;
       $('messages-container').replaceChildren(makeWelcome('Loading messages…'));
       await refreshSidebar();
       if (activeMessageChannel) supabase.removeChannel(activeMessageChannel);
@@ -488,25 +571,74 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
       if (currentChannelId !== channelId) return;
       const container = $('messages-container');
+      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
       container.replaceChildren();
       if (!data?.length) { container.appendChild(makeWelcome('No messages yet. Say hello!')); return; }
-      data.forEach((msg) => {
-        const isMe = msg.sender_id === authUser.id;
-        const sender = profilesCache.find((profile) => profile.id === msg.sender_id);
-        const senderName = isMe ? 'You' : (sender?.display_name || sender?.email || 'Member');
-        const wrapper = document.createElement('div');
-        wrapper.className = `message ${isMe ? 'sent' : 'received'}`;
-        const senderEl = document.createElement('div'); senderEl.className = 'msg-sender'; senderEl.textContent = senderName;
-        const body = document.createElement('div'); body.textContent = msg.text;
-        const time = document.createElement('div'); time.className = 'msg-time';
-        if (msg.created_at) {
-          const date = new Date(msg.created_at);
-          time.textContent = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-          time.title = date.toLocaleString();
+      for (const msg of data) await renderMessage(msg, container);
+      if (nearBottom || data.length) container.scrollTop = container.scrollHeight;
+    }
+
+    function parseMediaMessage(raw) {
+      if (!raw || !raw.startsWith(MEDIA_PREFIX)) return null;
+      try { return JSON.parse(raw.slice(MEDIA_PREFIX.length)); } catch { return null; }
+    }
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(Number(bytes))) return '';
+      const n = Number(bytes);
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function renderMessage(msg, container) {
+      const isMe = msg.sender_id === authUser.id;
+      const sender = profilesCache.find((profile) => profile.id === msg.sender_id);
+      let senderName = isMe ? 'You' : (sender?.display_name || sender?.email || 'Member');
+      if (!isMe && currentChannelType === 'dm' && sender && currentDMOther?.id === sender.id) {
+        senderName = getNickname(currentProfile?.email, sender);
+      }
+      const wrapper = document.createElement('div');
+      wrapper.className = `message ${isMe ? 'sent' : 'received'}`;
+      const senderEl = document.createElement('div'); senderEl.className = 'msg-sender'; senderEl.textContent = senderName;
+      const body = document.createElement('div');
+      const media = parseMediaMessage(msg.text);
+      if (media?.path) {
+        const card = document.createElement('div'); card.className = 'media-attachment';
+        const { data: signedData, error: signedError } = await supabase.storage.from('ccconnect-media').createSignedUrl(media.path, 3600);
+        if (!signedError && signedData?.signedUrl) {
+          const url = signedData.signedUrl;
+          if ((media.mime || '').startsWith('image/')) {
+            const img = document.createElement('img'); img.className = 'media-image'; img.src = url; img.alt = media.name || 'Shared image'; img.loading = 'lazy';
+            img.onerror = () => { img.replaceWith(makeMediaLink(url, media.name || 'Open image')); };
+            card.appendChild(img);
+          } else if ((media.mime || '').startsWith('video/')) {
+            const video = document.createElement('video'); video.className = 'media-video'; video.controls = true; video.preload = 'metadata'; video.src = url; card.appendChild(video);
+          } else if ((media.mime || '').startsWith('audio/')) {
+            const audio = document.createElement('audio'); audio.className = 'media-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; card.appendChild(audio);
+          } else {
+            card.appendChild(makeMediaLink(url, `↧  ${media.name || 'Download attachment'}`));
+          }
+          const meta = document.createElement('div'); meta.className = 'media-meta'; meta.textContent = `${media.name || 'Attachment'}${media.size ? ` · ${formatBytes(media.size)}` : ''}`; card.appendChild(meta);
+        } else {
+          card.textContent = `Attachment unavailable: ${media.name || 'file'} (it may have been removed or access is restricted).`;
         }
-        wrapper.append(senderEl, body, time); container.appendChild(wrapper);
-      });
-      container.scrollTop = container.scrollHeight;
+        body.appendChild(card);
+      } else {
+        body.textContent = msg.text;
+      }
+      const time = document.createElement('div'); time.className = 'msg-time';
+      if (msg.created_at) {
+        const date = new Date(msg.created_at);
+        time.textContent = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        time.title = date.toLocaleString();
+      }
+      wrapper.append(senderEl, body, time); container.appendChild(wrapper);
+    }
+
+    function makeMediaLink(url, label) {
+      const link = document.createElement('a'); link.className = 'media-file-link'; link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = label;
+      return link;
     }
 
     function makeWelcome(text) { const el = document.createElement('div'); el.className = 'welcome'; el.textContent = text; return el; }
@@ -529,12 +661,140 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       }
     }
 
+    async function uploadSelectedMedia(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      event.target.value = '';
+      if (!authUser || !currentChannelId) { alert('Open a conversation before attaching a file.'); return; }
+      const allowedTypes = new Set([
+        'image/jpeg','image/png','image/gif','image/webp','image/avif',
+        'video/mp4','video/webm','audio/mpeg','audio/mp4','audio/ogg','audio/wav','audio/webm',
+        'application/pdf','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ]);
+      if (!allowedTypes.has(file.type)) { alert('That file type is not supported. Use a photo, MP4/WebM video, supported audio, PDF, TXT, DOC or DOCX.'); return; }
+      if (file.size > 25 * 1024 * 1024) { alert('Files must be 25 MB or smaller.'); return; }
+      const channelId = currentChannelId;
+      const btn = $('attach-media-btn'); btn.disabled = true; btn.textContent = '…';
+      setChatStatus('Uploading attachment…');
+      const safeName = file.name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-100) || 'attachment';
+      const path = `${channelId}/${authUser.id}/${crypto.randomUUID()}-${safeName}`;
+      try {
+        const { error: uploadError } = await supabase.storage.from('ccconnect-media').upload(path, file, {
+          cacheControl: '3600', upsert: false, contentType: file.type
+        });
+        if (uploadError) throw uploadError;
+        const payload = `${MEDIA_PREFIX}${JSON.stringify({ path, name: file.name, mime: file.type, size: file.size })}`;
+        const { error: messageError } = await supabase.from('messages').insert({ conversation_id: channelId, sender_id: authUser.id, text: payload });
+        if (messageError) {
+          await supabase.storage.from('ccconnect-media').remove([path]);
+          throw messageError;
+        }
+        if (currentChannelId === channelId) setChatStatus('Live');
+      } catch (error) {
+        console.error('Media upload failed:', error);
+        alert(`Attachment could not be sent: ${error.message || 'Please try again.'}`);
+        if (currentChannelId === channelId) setChatStatus('Attachment failed');
+      } finally {
+        btn.disabled = !currentChannelId; btn.textContent = '＋';
+      }
+    }
+
     function subscribeSidebar() {
       if (sidebarChannel) supabase.removeChannel(sidebarChannel);
       sidebarChannel = supabase.channel('ccconnect-sidebar')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => { void refreshSidebar(); })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_members' }, () => { void refreshSidebar(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: message }) => handleIncomingMessage(message))
         .subscribe((status) => { if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Sidebar realtime status:', status); });
+    }
+
+    function handleIncomingMessage(message) {
+      if (!message || !authUser || message.sender_id === authUser.id) return;
+      const isDifferentConversation = message.conversation_id !== currentChannelId;
+      if (isDifferentConversation) {
+        unreadCounts[message.conversation_id] = Number(unreadCounts[message.conversation_id] || 0) + 1;
+        renderSidebar(groupsCache);
+      }
+      if (!isDifferentConversation && document.visibilityState === 'visible') return;
+      const person = profilesCache.find(p => p.id === message.sender_id);
+      const senderName = person ? (person.display_name || person.email) : 'New message';
+      const raw = String(message.text || '');
+      const media = parseMediaMessage(raw);
+      const preview = media ? `Sent an attachment${media.name ? `: ${media.name}` : ''}` : raw.slice(0, 140);
+      showToast(`${senderName}: ${preview}`);
+      if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const note = new Notification(`CCConnect · ${senderName}`, { body: preview || 'New message', tag: `ccconnect-${message.conversation_id}` });
+          note.onclick = () => { window.focus(); note.close(); };
+        } catch (error) { console.warn('Browser notification could not be shown:', error); }
+      }
+    }
+
+    function showToast(message) {
+      let toast = $('app-toast');
+      if (!toast) { toast = document.createElement('div'); toast.id = 'app-toast'; toast.setAttribute('role', 'status'); document.body.appendChild(toast); }
+      toast.textContent = message; toast.style.display = 'block';
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 5000);
+    }
+
+    async function toggleNotifications() {
+      if (!('Notification' in window)) { alert('This browser does not support desktop notifications.'); return; }
+      if (notificationsEnabled && Notification.permission === 'granted') {
+        notificationsEnabled = false;
+        localStorage.setItem('ccconnect_notifications_enabled', 'false');
+        updateNotificationsButton();
+        setChatStatus('Notifications off');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Notifications are blocked for this site. Use your browser’s site settings to allow them, then try again.');
+        return;
+      }
+      let permission = Notification.permission;
+      if (permission !== 'granted') permission = await Notification.requestPermission();
+      notificationsEnabled = permission === 'granted';
+      localStorage.setItem('ccconnect_notifications_enabled', String(notificationsEnabled));
+      updateNotificationsButton();
+      setChatStatus(notificationsEnabled ? 'Notifications on' : 'Notifications not enabled');
+      if (!notificationsEnabled && permission !== 'granted') alert('Browser notifications were not enabled. You can allow them in the browser address-bar site settings.');
+    }
+
+    function updateNotificationsButton() {
+      const button = $('notifications-toggle-btn');
+      if (!button) return;
+      const supported = 'Notification' in window;
+      if (!supported) { button.textContent = '🔕 Notifications unavailable'; button.disabled = true; return; }
+      const active = notificationsEnabled && Notification.permission === 'granted';
+      button.textContent = active ? '🔔 Notifications on' : '🔕 Enable notifications';
+      button.title = active ? 'Turn browser notifications off' : 'Allow browser notifications while CCConnect is open';
+    }
+
+    async function restorePopupConversation() {
+      const channelId = popupParams.get('conversation');
+      const type = popupParams.get('type');
+      const title = popupParams.get('name') || 'Conversation';
+      const otherId = popupParams.get('other');
+      if (!channelId || !['dm','group'].includes(type)) {
+        $('messages-container').replaceChildren(makeWelcome('Open a conversation in the main CCConnect window, then choose Pop-out.'));
+        $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+        return;
+      }
+      const { data: membership, error } = await supabase.from('conversation_members')
+        .select('conversation_id').eq('conversation_id', channelId).eq('user_id', authUser.id).maybeSingle();
+      if (error || !membership) {
+        $('messages-container').replaceChildren(makeWelcome('You do not have access to this conversation. Open it from your main CCConnect window.'));
+        $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+        return;
+      }
+      if (type === 'dm') {
+        currentDMOther = profilesCache.find(p => p.id === otherId) || null;
+        if (currentDMOther && !canShowDM(currentDMOther)) {
+          $('messages-container').replaceChildren(makeWelcome('This direct message is not available for this account.'));
+          $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+          return;
+        }
+      } else { currentDMOther = null; }
+      await activateChannel(channelId, title, type);
     }
 
     function openGCModal() {
@@ -580,29 +840,55 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
       $('nickname-modal').style.display = 'flex'; $('nickname-input').focus();
     }
     function closeNicknameModal() { $('nickname-modal').style.display = 'none'; }
-    function saveNickname() {
+
+    async function loadContactNicknames() {
+      nicknamesDB = {};
+      if (!authUser) return;
+      const { data, error } = await supabase.from('contact_nicknames')
+        .select('contact_id,nickname').eq('owner_id', authUser.id);
+      if (error) { console.warn('Could not load saved nicknames:', error.message); return; }
+      (data || []).forEach(row => { nicknamesDB[row.contact_id] = row.nickname; });
+    }
+
+    async function saveNickname() {
       const name = $('nickname-input').value.trim();
-      if (!name || !currentDMOther) return;
-      if (!nicknamesDB[currentProfile.email]) nicknamesDB[currentProfile.email] = {};
-      nicknamesDB[currentProfile.email][currentDMOther.email] = name;
-      localStorage.setItem('ccconnect_nicknames', JSON.stringify(nicknamesDB));
-      closeNicknameModal();
-      $('current-channel-name').textContent = `💬 ${name}`;
-      void refreshSidebar();
+      if (!name || !currentDMOther || !authUser) return;
+      const button = $('nick-save-btn'); button.disabled = true; button.textContent = 'Saving…';
+      try {
+        const { error } = await supabase.from('contact_nicknames').upsert({
+          owner_id: authUser.id, contact_id: currentDMOther.id, nickname: name, updated_at: new Date().toISOString()
+        }, { onConflict: 'owner_id,contact_id' });
+        if (error) throw error;
+        nicknamesDB[currentDMOther.id] = name;
+        closeNicknameModal();
+        $('current-channel-name').textContent = `💬 ${name}`;
+        await refreshSidebar();
+        setChatStatus('Nickname saved');
+      } catch (error) {
+        alert(`Nickname could not be saved: ${error.message || 'Please try again.'}`);
+      } finally {
+        button.disabled = false; button.textContent = 'Save';
+      }
     }
 
     async function togglePiP() {
-      if (!('documentPictureInPicture' in window)) { alert('Pop-out is not supported in this browser.'); return; }
-      try {
-        const pipWindow = await documentPictureInPicture.requestWindow({ width: 390, height: 560 });
-        [...document.styleSheets].forEach((sheet) => {
-          try { const style = document.createElement('style'); style.textContent = [...sheet.cssRules].map((rule) => rule.cssText).join(''); pipWindow.document.head.appendChild(style); } catch { /* External stylesheets may not be readable. */ }
-        });
-        const chatArea = document.querySelector('.chat-area');
-        pipWindow.document.body.style.margin = '0'; pipWindow.document.body.style.background = '#0f172a'; pipWindow.document.body.style.height = '100vh';
-        pipWindow.document.body.appendChild(chatArea);
-        pipWindow.addEventListener('pagehide', () => { $('app-screen').appendChild(chatArea); });
-      } catch (error) { console.error(error); alert('Could not open the pop-out window.'); }
+      if (!currentChannelId || !currentChannelType) {
+        alert('Open a conversation first, then pop it out.');
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.set('ccpopup', '1');
+      url.searchParams.set('conversation', currentChannelId);
+      url.searchParams.set('type', currentChannelType);
+      url.searchParams.set('name', $('current-channel-name').textContent || 'Conversation');
+      if (currentDMOther?.id) url.searchParams.set('other', currentDMOther.id);
+      else url.searchParams.delete('other');
+      const popup = window.open(url.toString(), `ccconnect-chat-${currentChannelId}`, 'popup=yes,width=520,height=720,resizable=yes,scrollbars=no');
+      if (!popup) {
+        alert('Your browser blocked the pop-out window. Allow pop-ups for your CCConnect site, then click Pop-out again.');
+        return;
+      }
+      popup.focus();
     }
   </script>
 </body>
