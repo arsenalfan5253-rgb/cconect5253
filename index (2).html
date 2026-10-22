@@ -48,7 +48,7 @@
     .header-btn:hover { background: rgba(255,255,255,.2); }
     #edit-name-btn { display: none; background: rgba(59,130,246,.2); border: 1px solid var(--accent); }
     #chat-status { font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
-    .messages { flex: 1; min-height: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: auto; overflow-anchor: auto; }
+    .messages { flex: 1; min-height: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: auto; overflow-anchor: none; }
     .message { max-width: min(78%, 700px); padding: 11px 14px; border-radius: 12px; line-height: 1.4; animation: fadeIn .2s ease; overflow-wrap: anywhere; white-space: pre-wrap; }
     .message.sent { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 2px; }
     .message.received { background: var(--card-bg); align-self: flex-start; border-bottom-left-radius: 2px; }
@@ -547,6 +547,9 @@ body.popup-mode .message { max-width:92%; }
       $('message-input').disabled = false;
       $('send-btn').disabled = false;
       $('attach-media-btn').disabled = false; $('media-file-input').disabled = false;
+      messageHistoryLoadedFor = null;
+      messageHistoryInitialisingFor = null;
+      pendingRealtimeMessages = [];
       $('messages-container').replaceChildren(makeWelcome('Loading messages…'));
       await refreshSidebar();
       if (activeMessageChannel) supabase.removeChannel(activeMessageChannel);
@@ -554,40 +557,121 @@ body.popup-mode .message { max-width:92%; }
       activeMessageChannel = supabase.channel(`messages-${channelId}`)
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${channelId}`
-        }, () => { if (currentChannelId === requestedChannelId) void loadMessages(requestedChannelId); })
+        }, ({ new: message }) => {
+          if (currentChannelId !== requestedChannelId || !message) return;
+          if (messageHistoryLoadedFor !== requestedChannelId) pendingRealtimeMessages.push(message);
+          else enqueueLiveMessage(message, requestedChannelId);
+        })
         .subscribe((status) => {
           if (currentChannelId !== requestedChannelId) return;
-          if (status === 'SUBSCRIBED') { setChatStatus('Live'); void loadMessages(requestedChannelId); }
+          if (status === 'SUBSCRIBED') { setChatStatus('Live'); void initialiseChannelMessages(requestedChannelId); }
           else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setChatStatus('Reconnecting…');
           else if (status === 'CLOSED') setChatStatus('Disconnected');
         });
     }
 
+    const renderingMessageIds = new Set();
+    let messageHistoryLoadedFor = null;
+    let messageHistoryInitialisingFor = null;
+    let pendingRealtimeMessages = [];
+    let liveMessageQueue = Promise.resolve();
+
     async function loadMessages(channelId) {
-      if (!authUser || currentChannelId !== channelId) return;
+      if (!authUser || currentChannelId !== channelId) return false;
       const { data, error } = await supabase.from('messages')
         .select('id,conversation_id,sender_id,text,created_at')
         .eq('conversation_id', channelId).order('created_at', { ascending: true }).limit(500);
-      if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
-      if (currentChannelId !== channelId) return;
+      if (error) { setChatStatus('Could not load messages'); console.error(error); return false; }
+      if (currentChannelId !== channelId) return false;
+
       const container = $('messages-container');
-      // Preserve the reader's position when Realtime reloads the conversation.
-      // Only auto-scroll when they were already near the bottom.
-      const previousScrollTop = container.scrollTop;
+      const hadMessages = !!container.querySelector('.message');
       const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      container.replaceChildren();
+      // Do not rebuild the conversation on every Realtime event: replacing all message
+      // nodes resets the user's reading position and makes the chat jump to the top.
+      if (!hadMessages) container.replaceChildren();
+
       if (!data?.length) {
-        container.appendChild(makeWelcome('No messages yet. Say hello!'));
-        return;
+        if (!container.querySelector('.message') && !container.querySelector('.welcome')) {
+          container.appendChild(makeWelcome('No messages yet. Say hello!'));
+        }
+        return true;
       }
-      for (const msg of data) await renderMessage(msg, container);
+
+      const welcome = container.querySelector('.welcome');
+      if (welcome) welcome.remove();
+      for (const msg of data) {
+        if (currentChannelId !== channelId) return false;
+        const selector = `[data-message-id="${CSS.escape(String(msg.id))}"]`;
+        if (container.querySelector(selector) || renderingMessageIds.has(String(msg.id))) continue;
+        renderingMessageIds.add(String(msg.id));
+        try {
+          await renderMessage(msg, container);
+        } catch (renderError) {
+          console.error('Could not render message:', renderError);
+        } finally {
+          renderingMessageIds.delete(String(msg.id));
+        }
+      }
+
       requestAnimationFrame(() => {
         if (currentChannelId !== channelId) return;
-        if (wasNearBottom) {
-          container.scrollTop = container.scrollHeight;
-        } else {
-          container.scrollTop = previousScrollTop;
-        }
+        // First load starts at the newest message; otherwise respect the reader's position.
+        if (!hadMessages || wasNearBottom) container.scrollTop = container.scrollHeight;
+      });
+      return true;
+    }
+
+    async function initialiseChannelMessages(channelId) {
+      if (messageHistoryLoadedFor === channelId || messageHistoryInitialisingFor === channelId) return;
+      messageHistoryInitialisingFor = channelId;
+      const loaded = await loadMessages(channelId);
+      if (messageHistoryInitialisingFor === channelId) messageHistoryInitialisingFor = null;
+      if (loaded !== true || currentChannelId !== channelId) return;
+
+      // Drain any live events received while the initial history query was running.
+      // Keep the channel in "initialising" mode until the queue is empty to preserve order.
+      while (currentChannelId === channelId && pendingRealtimeMessages.length) {
+        const queued = pendingRealtimeMessages
+          .filter((message) => String(message.conversation_id) === String(channelId))
+          .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+        pendingRealtimeMessages = [];
+        for (const message of queued) await appendLiveMessage(message, channelId);
+      }
+      if (currentChannelId === channelId) messageHistoryLoadedFor = channelId;
+    }
+
+    function enqueueLiveMessage(message, channelId) {
+      liveMessageQueue = liveMessageQueue
+        .then(() => appendLiveMessage(message, channelId))
+        .catch((error) => console.error('Could not append live message:', error));
+    }
+
+    async function appendLiveMessage(message, channelId) {
+      if (!message || currentChannelId !== channelId || String(message.conversation_id) !== String(channelId)) return;
+      const container = $('messages-container');
+      const messageId = String(message.id);
+      const selector = `[data-message-id="${CSS.escape(messageId)}"]`;
+      if (container.querySelector(selector) || renderingMessageIds.has(messageId)) return;
+
+      const savedScrollTop = container.scrollTop;
+      const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      const welcome = container.querySelector('.welcome');
+      if (welcome) welcome.remove();
+
+      renderingMessageIds.add(messageId);
+      try {
+        await renderMessage(message, container);
+      } catch (error) {
+        console.error('Could not render live message:', error);
+      } finally {
+        renderingMessageIds.delete(messageId);
+      }
+      requestAnimationFrame(() => {
+        if (currentChannelId !== channelId) return;
+        // New messages must not drag someone reading older messages to either end.
+        if (wasNearBottom) container.scrollTop = container.scrollHeight;
+        else container.scrollTop = savedScrollTop;
       });
     }
 
@@ -613,6 +697,7 @@ body.popup-mode .message { max-width:92%; }
       }
       const wrapper = document.createElement('div');
       wrapper.className = `message ${isMe ? 'sent' : 'received'}`;
+      wrapper.dataset.messageId = String(msg.id);
       const senderEl = document.createElement('div'); senderEl.className = 'msg-sender'; senderEl.textContent = senderName;
       const body = document.createElement('div');
       const media = parseMediaMessage(msg.text);
