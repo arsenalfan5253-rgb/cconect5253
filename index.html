@@ -48,7 +48,7 @@
     .header-btn:hover { background: rgba(255,255,255,.2); }
     #edit-name-btn { display: none; background: rgba(59,130,246,.2); border: 1px solid var(--accent); }
     #chat-status { font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
-    .messages { flex: 1; min-height: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+    .messages { flex: 1; min-height: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: auto; overflow-anchor: none; }
     .message { max-width: min(78%, 700px); padding: 11px 14px; border-radius: 12px; line-height: 1.4; animation: fadeIn .2s ease; overflow-wrap: anywhere; white-space: pre-wrap; }
     .message.sent { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 2px; }
     .message.received { background: var(--card-bg); align-self: flex-start; border-bottom-left-radius: 2px; }
@@ -317,6 +317,8 @@ body.popup-mode .message { max-width:92%; }
     let authUser = null;
     let currentProfile = null;
     let currentChannelId = null;
+    let renderedMessagesChannelId = null;
+    const renderedMessageIds = new Set();
     let currentDMOther = null;
     let currentChannelType = null;
     let profilesCache = [];
@@ -570,12 +572,36 @@ body.popup-mode .message { max-width:92%; }
         .eq('conversation_id', channelId).order('created_at', { ascending: true }).limit(500);
       if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
       if (currentChannelId !== channelId) return;
+
       const container = $('messages-container');
-      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      container.replaceChildren();
-      if (!data?.length) { container.appendChild(makeWelcome('No messages yet. Say hello!')); return; }
-      for (const msg of data) await renderMessage(msg, container);
-      if (nearBottom || data.length) container.scrollTop = container.scrollHeight;
+      const firstLoadForChannel = renderedMessagesChannelId !== channelId;
+      const nearBottom = firstLoadForChannel ||
+        container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+
+      if (firstLoadForChannel) {
+        renderedMessageIds.clear();
+        renderedMessagesChannelId = channelId;
+        container.replaceChildren();
+      }
+
+      if (!data?.length) {
+        if (!container.childElementCount) container.appendChild(makeWelcome('No messages yet. Say hello!'));
+        return;
+      }
+
+      if (container.querySelector('.welcome')) container.replaceChildren();
+      const unseenMessages = data.filter(msg => !renderedMessageIds.has(String(msg.id)));
+      for (const msg of unseenMessages) {
+        if (currentChannelId !== channelId) return;
+        // Mark before awaiting media rendering so simultaneous realtime events cannot duplicate it.
+        renderedMessageIds.add(String(msg.id));
+        await renderMessage(msg, container);
+      }
+
+      // Only follow new messages if the reader was already at the bottom.
+      if (unseenMessages.length && nearBottom && currentChannelId === channelId) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
 
     function parseMediaMessage(raw) {
