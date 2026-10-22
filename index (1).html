@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>ccconnect</title>
+  <style>
+    :root {
+      --bg-color: #0f172a; --card-bg: rgba(30, 41, 59, 0.78);
+      --text-main: #f8fafc; --text-muted: #94a3b8;
+      --accent: #3b82f6; --accent-hover: #2563eb; --sidebar-width: 300px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-color); color: var(--text-main); min-height: 100vh; height: 100dvh; display: flex; overflow: hidden; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%); background-attachment: fixed; background-size: cover; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 100%; padding: 20px; }
+    .auth-card { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.1); padding: 36px; border-radius: 16px; width: 100%; max-width: 410px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,.5); }
+    .auth-card h1 { font-size: 2.2rem; margin-bottom: 6px; letter-spacing: -1px; }
+    .auth-card p { color: var(--text-muted); margin-bottom: 24px; font-size: .95rem; }
+    .auth-card input { width: 100%; padding: 12px; margin-bottom: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.25); color: white; outline: none; }
+    .auth-card input:focus { border-color: var(--accent); }
+    .auth-card button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; transition: background .2s; }
+    .auth-card button:hover { background: var(--accent-hover); }
+    #auth-error { color: #fca5a5; margin: 14px 0 0; font-size: .88rem; line-height: 1.4; }
+    #app-screen { display: none; width: 100%; height: 100%; min-height: 0; }
+    .sidebar { flex: 0 0 var(--sidebar-width); max-width: 45%; background: rgba(15,23,42,.95); border-right: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; min-height: 0; }
+    .sidebar-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .sidebar-header h2 { font-size: 1.2rem; }
+    .create-gc-btn { background: rgba(59,130,246,.2); border: 1px solid var(--accent); color: white; padding: 7px 10px; border-radius: 6px; font-size: .8rem; display: none; }
+    .create-gc-btn:hover { background: var(--accent); }
+    .channel-section-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); padding: 16px 20px 8px; }
+    .channel-list { flex: 1; overflow-y: auto; }
+    .channel-item { padding: 11px 20px; cursor: pointer; color: var(--text-muted); transition: background .2s; font-size: .95rem; display: flex; align-items: center; gap: 10px; overflow-wrap: anywhere; }
+    .channel-item:hover { background: rgba(255,255,255,.05); color: white; }
+    .channel-item.active { background: rgba(59,130,246,.15); color: #93c5fd; border-right: 3px solid var(--accent); font-weight: 600; }
+    .empty-list { padding: 4px 20px 10px; color: #64748b; font-size: .85rem; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.1); font-size: .9rem; }
+    .user-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .user-info span { overflow-wrap: anywhere; }
+    .logout-btn { background: none; border: none; color: #f87171; font-size: .85rem; white-space: nowrap; }
+    .chat-area { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg-color); }
+    .chat-header { padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 12px; min-height: 66px; }
+    .chat-header h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .header-btn { background: rgba(255,255,255,.1); border: none; color: white; padding: 7px 10px; border-radius: 6px; font-size: .82rem; white-space: nowrap; }
+    .header-btn:hover { background: rgba(255,255,255,.2); }
+    #edit-name-btn { display: none; background: rgba(59,130,246,.2); border: 1px solid var(--accent); }
+    #chat-status { font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+    .messages { flex: 1; min-height: 0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: auto; overflow-anchor: auto; }
+    .message { max-width: min(78%, 700px); padding: 11px 14px; border-radius: 12px; line-height: 1.4; animation: fadeIn .2s ease; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .message.sent { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 2px; }
+    .message.received { background: var(--card-bg); align-self: flex-start; border-bottom-left-radius: 2px; }
+    .msg-sender { font-size: .75rem; color: rgba(255,255,255,.75); margin-bottom: 4px; }
+    .msg-time { font-size: .68rem; color: rgba(255,255,255,.6); margin-top: 5px; text-align: right; }
+    .welcome { margin: auto; max-width: 360px; color: var(--text-muted); text-align: center; line-height: 1.6; padding: 24px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .input-area { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.1); display: flex; gap: 10px; }
+    .input-area input { flex: 1; min-width: 0; padding: 13px 16px; border-radius: 24px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.2); color: white; outline: none; }
+    .input-area input:focus { border-color: var(--accent); }
+    .input-area button { padding: 0 20px; border-radius: 24px; border: none; background: var(--accent); color: white; font-weight: bold; }
+    .input-area button:hover { background: var(--accent-hover); }
+    .input-area button:disabled, .input-area input:disabled { opacity: .45; cursor: not-allowed; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 200; justify-content: center; align-items: center; padding: 20px; }
+    .modal { background: #1e293b; border: 1px solid rgba(255,255,255,.1); padding: 24px; border-radius: 12px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { margin-bottom: 16px; font-size: 1.2rem; }
+    .modal input[type="text"] { width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.2); color: white; outline: none; }
+    .member-select { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
+    .member-option { display: flex; align-items: center; gap: 9px; font-size: .9rem; color: #e2e8f0; }
+    .member-option input { accent-color: var(--accent); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-actions button { padding: 9px 16px; border-radius: 6px; border: none; font-weight: 500; }
+    .btn-cancel { background: rgba(255,255,255,.1); color: white; }
+    .btn-primary { background: var(--accent); color: white; }
+    @media (max-width: 720px) {
+      :root { --sidebar-width: 122px; }
+      .sidebar { max-width: 42%; }
+      .sidebar-header { padding: 14px 10px; align-items: flex-start; flex-direction: column; }
+      .sidebar-header h2 { font-size: 1.05rem; }
+      .create-gc-btn { padding: 6px 8px; }
+      .channel-section-title { padding: 14px 10px 6px; font-size: .65rem; }
+      .channel-item { padding: 10px; font-size: .83rem; }
+      .empty-list { padding: 4px 10px 8px; font-size: .75rem; }
+      .sidebar-footer { padding: 12px 10px; }
+      .user-info { flex-direction: column; align-items: flex-start; }
+      .chat-header { padding: 12px; gap: 7px; flex-wrap: wrap; }
+      .chat-header h3 { flex-basis: 100%; font-size: 1rem; }
+      .header-btn { font-size: .75rem; padding: 6px 8px; }
+      .messages { padding: 12px; }
+      .message { max-width: 90%; }
+      .input-area { padding: 12px; gap: 7px; }
+      .input-area input { padding: 11px 13px; }
+      .input-area button { padding: 0 14px; }
+    }
+
+    /* --- CCConnect visual refresh --- */
+/* CCConnect visual refresh — integrated stylesheet. */
+:root {
+  --bg-color: #0b1020;
+  --card-bg: rgba(22, 30, 51, .88);
+  --text-main: #f4f7ff;
+  --text-muted: #9ba9c4;
+  --accent: #7c6cff;
+  --accent-hover: #6654f4;
+  --sidebar-width: 310px;
+  --line: rgba(173, 187, 220, .13);
+  --surface: #121a2d;
+}
+* { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body {
+  background-color: var(--bg-color);
+  background-image: radial-gradient(ellipse at 12% 0%, rgba(124,108,255,.15), transparent 38%),
+    radial-gradient(ellipse at 90% 8%, rgba(45,177,210,.09), transparent 32%);
+  color: var(--text-main);
+  letter-spacing: .005em;
+}
+button, input { transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-offset: 3px; }
+#auth-screen { position: relative; overflow: hidden; }
+.auth-card {
+  position: relative; padding: 42px; max-width: 430px;
+  background: linear-gradient(145deg, rgba(24,33,57,.96), rgba(14,20,37,.96));
+  border: 1px solid rgba(174,184,255,.2); border-radius: 24px;
+  box-shadow: 0 30px 100px rgba(0,0,0,.38), 0 0 0 8px rgba(124,108,255,.025);
+}
+.auth-card h1 { font-size: clamp(2.25rem, 6vw, 2.8rem); font-weight: 800; letter-spacing: -.075em; margin-bottom: 8px; }
+.auth-card h1::first-letter { color: #a69cff; }
+.auth-card p { color: var(--text-muted); line-height: 1.6; }
+.auth-card input, .modal input[type="text"] {
+  padding: 14px 15px; border-radius: 12px; border: 1px solid var(--line);
+  background: rgba(7,11,23,.65); color: var(--text-main);
+}
+.auth-card input:focus, .modal input[type="text"]:focus, .input-area input:focus {
+  border-color: rgba(166,156,255,.8); box-shadow: 0 0 0 4px rgba(124,108,255,.12); outline: none;
+}
+.auth-card button, .input-area button, .btn-primary {
+  background: linear-gradient(135deg, #897bff, #6654f4); color: white; border: 0;
+  box-shadow: 0 8px 24px rgba(102,84,244,.2); font-weight: 700;
+}
+.auth-card button { border-radius: 12px; padding: 14px; }
+.auth-card button:hover, .input-area button:hover, .btn-primary:hover { background: linear-gradient(135deg, #9b90ff, #7868ff); transform: translateY(-1px); }
+#app-screen { background: rgba(11,16,32,.92); }
+.sidebar { background: rgba(14,21,39,.97); border-right: 1px solid var(--line); }
+.sidebar-header { padding: 23px 20px; border-bottom-color: var(--line); }
+.sidebar-header h2 { font-size: 1.35rem; font-weight: 800; letter-spacing: -.055em; }
+.sidebar-header h2::first-letter { color: #a69cff; }
+.create-gc-btn { border-radius: 10px; border-color: rgba(166,156,255,.35); background: rgba(124,108,255,.13); padding: 9px 11px; }
+.create-gc-btn:hover { background: var(--accent); }
+.channel-section-title { padding: 21px 18px 9px; color: #7483a4; font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.channel-item { margin: 3px 9px; padding: 12px 12px; border-radius: 11px; font-size: .9rem; color: #aeb9d0; }
+.channel-item:hover { background: rgba(255,255,255,.045); color: white; }
+.channel-item.active { background: linear-gradient(90deg, rgba(124,108,255,.2), rgba(124,108,255,.07)); color: #d4ceff; border-right: 0; box-shadow: inset 3px 0 #8d80ff; }
+.empty-list { color: #6d7b98; }
+.sidebar-footer { border-top-color: var(--line); padding: 17px 18px; background: rgba(7,11,22,.25); }
+.user-info span { font-weight: 600; font-size: .88rem; }
+.logout-btn { padding: 7px 10px; border-radius: 8px; color: #ff9eae; }
+.logout-btn:hover { background: rgba(255,110,139,.1); }
+.chat-area { background: radial-gradient(ellipse at 50% 0%, rgba(34,45,79,.2), transparent 50%), #0b1020; }
+.chat-header { padding: 20px 26px; min-height: 78px; border-bottom-color: var(--line); background: rgba(13,19,35,.72); }
+.chat-header h3 { font-size: 1.04rem; font-weight: 750; letter-spacing: -.02em; }
+.header-btn { background: #1a2440; border: 1px solid var(--line); color: #dce3f6; padding: 9px 12px; border-radius: 10px; }
+.header-btn:hover { background: #253154; }
+#edit-name-btn { background: rgba(124,108,255,.13); border-color: rgba(166,156,255,.3); }
+#chat-status { color: #8d9cba; }
+.messages { padding: 28px clamp(16px, 4vw, 42px); gap: 14px; }
+.message { max-width: min(76%, 680px); padding: 12px 16px; border-radius: 17px; line-height: 1.55; box-shadow: 0 5px 16px rgba(0,0,0,.08); }
+.message.sent { background: linear-gradient(135deg, #8173ff, #6252e8); border-bottom-right-radius: 5px; }
+.message.received { background: #18223a; border: 1px solid rgba(172,187,220,.08); border-bottom-left-radius: 5px; }
+.msg-sender { color: #c5ccdf; font-weight: 700; letter-spacing: .015em; }
+.msg-time { color: rgba(235,239,255,.62); }
+.welcome { padding: 32px; max-width: 390px; border: 1px solid var(--line); background: rgba(20,29,50,.42); border-radius: 22px; }
+.input-area { padding: 18px clamp(12px, 3vw, 30px) 22px; border-top-color: var(--line); background: rgba(13,19,35,.75); }
+.input-area input { padding: 14px 18px; border-radius: 15px; border: 1px solid var(--line); background: #111a2e; }
+.input-area button { border-radius: 13px; padding: 0 23px; }
+.modal-overlay { background: rgba(3,6,15,.76); }
+.modal { background: linear-gradient(145deg, #1a2440, #11192d); border: 1px solid rgba(174,184,220,.17); border-radius: 20px; box-shadow: 0 25px 80px rgba(0,0,0,.45); padding: 27px; }
+.modal h3 { font-weight: 750; letter-spacing: -.025em; }
+.btn-cancel { border: 1px solid var(--line) !important; border-radius: 9px !important; }
+.btn-primary { border-radius: 9px !important; }
+@media (max-width: 720px) {
+  :root { --sidebar-width: 42%; }
+  .sidebar { max-width: 42%; }
+  .sidebar-header { padding: 14px 10px; }
+  .channel-item { margin: 2px 5px; padding: 10px 8px; }
+  .chat-header { padding: 12px; }
+  .messages { padding: 14px 10px; }
+  .message { max-width: 94%; padding: 10px 12px; }
+  .input-area { padding: 11px 9px max(12px, env(safe-area-inset-bottom)); }
+  .input-area button { padding: 0 14px; }
+  .auth-card { padding: 30px 22px; border-radius: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+
+/* CCConnect v2: searchable sidebar, browser notifications, media and popup chat */
+.sidebar-search-wrap { padding: 13px 14px 4px; }
+#sidebar-search { width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--line); background:#0b1222; color:var(--text-main); outline:none; }
+#sidebar-search:focus { border-color:rgba(166,156,255,.8); box-shadow:0 0 0 3px rgba(124,108,255,.12); }
+#notifications-toggle-btn { width:100%; margin-top:12px; text-align:left; }
+.sidebar-footer .user-info { gap:10px; }
+.channel-item { gap:10px; }
+.channel-icon { display:inline-flex; flex:0 0 28px; height:28px; border-radius:9px; align-items:center; justify-content:center; background:rgba(124,108,255,.11); font-size:.85rem; }
+.channel-title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.unread-badge { display:inline-flex; align-items:center; justify-content:center; min-width:21px; height:21px; padding:0 6px; border-radius:999px; background:#8b7cff; color:#fff; font-size:.72rem; font-weight:800; margin-left:auto; }
+.input-area { align-items:center; }
+.attach-media-btn { flex:0 0 44px; height:44px; padding:0 !important; border-radius:13px !important; font-size:1.45rem !important; line-height:1; background:#1a2440 !important; color:#dce3f6 !important; border:1px solid var(--line) !important; box-shadow:none !important; }
+.attach-media-btn:hover { background:#26345a !important; }
+#media-file-input { display:none; }
+.media-attachment { min-width:0; display:flex; flex-direction:column; gap:8px; }
+.media-image { display:block; max-width:min(100%,380px); max-height:360px; border-radius:12px; object-fit:contain; background:#080c17; }
+.media-video { display:block; width:min(100%,400px); max-height:340px; border-radius:12px; background:#05070d; }
+.media-audio { display:block; width:min(100%,360px); max-width:100%; }
+.media-file-link { display:inline-flex; align-items:center; gap:9px; color:#d9d3ff; background:rgba(124,108,255,.12); border:1px solid rgba(166,156,255,.22); border-radius:10px; padding:10px 12px; text-decoration:none; overflow-wrap:anywhere; }
+.media-file-link:hover { background:rgba(124,108,255,.22); }
+.media-meta { color:#9ba9c4; font-size:.75rem; }
+#app-toast { position:fixed; z-index:500; bottom:20px; left:50%; transform:translateX(-50%); max-width:min(90vw,500px); padding:12px 16px; border-radius:12px; background:#1d2845; color:#f4f7ff; border:1px solid rgba(166,156,255,.28); box-shadow:0 12px 40px rgba(0,0,0,.4); display:none; }
+body.popup-mode { display:block; height:100vh; min-height:0; overflow:hidden; }
+body.popup-mode #auth-screen { height:100vh; min-height:100vh; }
+body.popup-mode #app-screen { display:flex !important; width:100%; height:100vh; min-height:0; }
+body.popup-mode .sidebar { display:none !important; }
+body.popup-mode .chat-area { display:flex; flex:1 1 auto; width:100%; height:100%; min-height:0; min-width:0; }
+body.popup-mode #pip-btn { display:none !important; }
+body.popup-mode .chat-header { padding:14px 16px; min-height:62px; }
+body.popup-mode .messages { padding:18px; }
+body.popup-mode .input-area { padding:12px; }
+body.popup-mode .message { max-width:92%; }
+@media (max-width:720px) {
+  .sidebar-search-wrap { padding:10px 8px 2px; }
+  #sidebar-search { padding:9px 8px; font-size:.8rem; }
+  .channel-icon { flex-basis:24px; width:24px; height:24px; }
+  .channel-item { gap:7px; }
+  #notifications-toggle-btn { font-size:.72rem; padding:7px 8px; }
+  .attach-media-btn { flex-basis:38px; height:40px; }
+}
+
+  </style>
+</head>
+<body>
+  <div id="auth-screen">
+    <div class="auth-card">
+      <h1>ccconnect</h1>
+      <p>Secure Portal</p>
+      <input type="email" id="email-input" placeholder="Email Address" autocomplete="username" required>
+      <input type="password" id="passcode-input" placeholder="Password" autocomplete="current-password" required>
+      <button id="login-btn">Sign In</button>
+      <p id="auth-error" role="alert" aria-live="polite" hidden></p>
+    </div>
+  </div>
+
+  <div id="app-screen">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>ccconnect</h2>
+        <button id="admin-gc-btn" class="create-gc-btn">+ New group</button>
+      </div>
+      <div class="sidebar-search-wrap"><input type="search" id="sidebar-search" placeholder="Search people and groups…" aria-label="Search people and groups"></div>
+      <div class="channel-list">
+        <div class="channel-section-title">Direct Messages</div>
+        <div id="dm-list"></div>
+        <div class="channel-section-title">Group Chats</div>
+        <div id="gc-list"></div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="user-info"><span id="current-user-name">User</span><button id="logout-btn" class="logout-btn">Log out</button></div>
+        <button id="notifications-toggle-btn" class="header-btn" type="button" title="Enable browser notifications">🔔 Enable notifications</button>
+      </div>
+    </aside>
+    <main class="chat-area">
+      <div class="chat-header">
+        <h3 id="current-channel-name">Select a conversation</h3>
+        <span id="chat-status" aria-live="polite"></span>
+        <button id="edit-name-btn" class="header-btn">✏️ Nickname</button>
+        <button id="pip-btn" class="header-btn" type="button">↗ Pop-out</button>
+      </div>
+      <div class="messages" id="messages-container"><div class="welcome">Choose a conversation on the left to start messaging.</div></div>
+      <form class="input-area" id="message-form">
+        <button id="attach-media-btn" class="attach-media-btn" type="button" aria-label="Attach a photo, video, audio or file" title="Attach media" disabled>＋</button>
+        <input id="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.txt,.doc,.docx" disabled>
+        <input type="text" id="message-input" placeholder="Type a message…" maxlength="4000" autocomplete="off" disabled>
+        <button id="send-btn" type="submit" disabled>Send</button>
+      </form>
+    </main>
+  </div>
+
+  <div id="gc-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="gc-modal-title">
+    <div class="modal">
+      <h3 id="gc-modal-title">Create a group chat</h3>
+      <input type="text" id="gc-name-input" placeholder="Group chat name" maxlength="80">
+      <div class="member-select" id="member-checkboxes"></div>
+      <div class="modal-actions"><button id="gc-cancel-btn" class="btn-cancel" type="button">Cancel</button><button id="gc-create-btn" class="btn-primary" type="button">Create</button></div>
+    </div>
+  </div>
+
+  <div id="nickname-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="nickname-modal-title">
+    <div class="modal">
+      <h3 id="nickname-modal-title">Set a nickname</h3>
+      <input type="text" id="nickname-input" placeholder="Enter nickname" maxlength="60">
+      <div class="modal-actions"><button id="nick-cancel-btn" class="btn-cancel" type="button">Cancel</button><button id="nick-save-btn" class="btn-primary" type="button">Save</button></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    // Add your Supabase Project URL and publishable key here after following README.md.
+    // A publishable/anon key is intended for browser use. NEVER put a service_role/secret key here.
+    const SUPABASE_URL = 'https://bclhrmwrkwrvzgufrmdy.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_juLjImzGzATf9dSOK2d37w_cz7rclQA';
+    const configured = SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('PASTE_') && !!SUPABASE_PUBLISHABLE_KEY && !SUPABASE_PUBLISHABLE_KEY.includes('PASTE_');
+    const supabase = configured ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    }) : null;
+
+    let authUser = null;
+    let currentProfile = null;
+    let currentChannelId = null;
+    let currentDMOther = null;
+    let currentChannelType = null;
+    let profilesCache = [];
+    let activeMessageChannel = null;
+    let sidebarChannel = null;
+    let appStarting = false;
+    let nicknamesDB = {}; // contact_id -> nickname, loaded from Supabase for this signed-in user
+    let groupsCache = [];
+    let unreadCounts = {};
+    const MEDIA_PREFIX = 'CCMEDIA1:';
+    const popupParams = new URLSearchParams(window.location.search);
+    const isPopupWindow = popupParams.get('ccpopup') === '1';
+    if (isPopupWindow) document.body.classList.add('popup-mode');
+    let notificationsEnabled = localStorage.getItem('ccconnect_notifications_enabled') === 'true';
+    let toastTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+    const ADMIN_LABEL = 'Group creation is limited to the admin account.';
+    const restrictedMessage = 'This direct message is not available for this account.';
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      $('login-btn').addEventListener('click', handleLogin);
+      $('email-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+      $('passcode-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+      $('logout-btn').addEventListener('click', handleLogout);
+      $('message-form').addEventListener('submit', sendMessage);
+      $('admin-gc-btn').addEventListener('click', openGCModal);
+      $('edit-name-btn').addEventListener('click', openNicknameModal);
+      $('pip-btn').addEventListener('click', togglePiP);
+      $('attach-media-btn').addEventListener('click', () => $('media-file-input').click());
+      $('media-file-input').addEventListener('change', uploadSelectedMedia);
+      $('notifications-toggle-btn').addEventListener('click', toggleNotifications);
+      $('sidebar-search').addEventListener('input', () => renderSidebar(groupsCache));
+      if (isPopupWindow) { $('pip-btn').style.display = 'none'; document.title = 'CCConnect · Pop-out chat'; }
+      updateNotificationsButton();
+      $('gc-cancel-btn').addEventListener('click', closeGCModal);
+      $('gc-create-btn').addEventListener('click', createGroupChat);
+      $('nick-cancel-btn').addEventListener('click', closeNicknameModal);
+      $('nick-save-btn').addEventListener('click', saveNickname);
+
+      if (!configured) {
+        showAuthError('Setup required: add your Supabase Project URL and publishable key in index.html. Follow README.md first.');
+        $('login-btn').disabled = true;
+        return;
+      }
+      const { data, error } = await supabase.auth.getSession();
+      if (error) showAuthError('Could not restore your session. Please sign in again.');
+      if (data?.session?.user) await startApp(data.session.user);
+      supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') resetAppUI();
+      });
+    });
+
+    function showAuthError(message) {
+      const el = $('auth-error');
+      el.textContent = message;
+      el.hidden = !message;
+    }
+
+    async function handleLogin() {
+      if (!supabase) {
+        showAuthError('Setup required: configure Supabase in index.html and run the database setup SQL.');
+        return;
+      }
+      const email = $('email-input').value.trim().toLowerCase();
+      const password = $('passcode-input').value;
+      if (!email || !password) { showAuthError('Enter your email and password.'); return; }
+      const button = $('login-btn');
+      button.disabled = true;
+      button.textContent = 'Signing in…';
+      showAuthError('');
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await startApp(data.user);
+      } catch (error) {
+        showAuthError(error?.message?.includes('Invalid login credentials') ? 'Email or password is incorrect.' : (error?.message || 'Sign-in failed. Check your connection and Supabase setup.'));
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Sign In';
+      }
+    }
+
+    async function startApp(user) {
+      if (appStarting) return;
+      appStarting = true;
+      try {
+        const { data: profile, error } = await supabase.from('profiles')
+          .select('id,email,display_name,is_admin,dm_admin_only').eq('id', user.id).single();
+        if (error || !profile) throw new Error('Your profile was not created. Run the setup SQL and make sure this account exists in Supabase Authentication.');
+        authUser = user;
+        currentProfile = profile;
+        await loadContactNicknames();
+        $('auth-screen').style.display = 'none';
+        $('app-screen').style.display = 'flex';
+        $('current-user-name').textContent = profile.display_name || profile.email;
+        $('admin-gc-btn').style.display = profile.is_admin ? 'block' : 'none';
+        showAuthError('');
+        await refreshSidebar();
+        subscribeSidebar();
+        if (isPopupWindow) await restorePopupConversation();
+      } catch (error) {
+        showAuthError(error.message || 'Could not load your profile.');
+        $('auth-screen').style.display = 'flex';
+        $('app-screen').style.display = 'none';
+      } finally {
+        appStarting = false;
+      }
+    }
+
+    async function handleLogout() {
+      if (supabase) {
+        const { error } = await supabase.auth.signOut();
+        if (error) showAuthError('Could not sign out cleanly. Close this tab to end this session.');
+      }
+      resetAppUI();
+    }
+
+    function resetAppUI() {
+      if (activeMessageChannel && supabase) supabase.removeChannel(activeMessageChannel);
+      if (sidebarChannel && supabase) supabase.removeChannel(sidebarChannel);
+      activeMessageChannel = null; sidebarChannel = null;
+      authUser = null; currentProfile = null; currentChannelId = null; currentDMOther = null; currentChannelType = null; profilesCache = [];
+      $('app-screen').style.display = 'none';
+      $('auth-screen').style.display = 'flex';
+      $('email-input').value = ''; $('passcode-input').value = '';
+      $('current-channel-name').textContent = 'Select a conversation';
+      $('messages-container').replaceChildren(makeWelcome('Choose a conversation on the left to start messaging.'));
+      $('chat-status').textContent = '';
+      $('edit-name-btn').style.display = 'none';
+      $('message-input').value = ''; $('message-input').disabled = true; $('send-btn').disabled = true;
+      $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+      $('dm-list').replaceChildren(); $('gc-list').replaceChildren();
+      unreadCounts = {}; nicknamesDB = {}; groupsCache = [];
+    }
+
+    async function refreshSidebar() {
+      if (!authUser || !currentProfile) return;
+      const { data: profiles, error: profileError } = await supabase.from('profiles')
+        .select('id,email,display_name,is_admin,dm_admin_only').order('display_name', { ascending: true });
+      if (profileError) { setChatStatus('Could not load users'); console.error(profileError); return; }
+      profilesCache = profiles || [];
+      const { data: groups, error: groupError } = await supabase.from('conversations')
+        .select('id,name,created_at').eq('type', 'group').order('created_at', { ascending: true });
+      if (groupError) { setChatStatus('Could not load groups'); console.error(groupError); return; }
+      groupsCache = groups || [];
+      renderSidebar(groupsCache);
+    }
+
+    function canShowDM(other) {
+      if (!currentProfile || other.id === currentProfile.id) return false;
+      if (other.dm_admin_only && !currentProfile.is_admin) return false;
+      if (currentProfile.dm_admin_only && !other.is_admin) return false;
+      return true;
+    }
+
+    function renderSidebar(groups) {
+      const dmList = $('dm-list'); const gcList = $('gc-list');
+      dmList.replaceChildren(); gcList.replaceChildren();
+      const query = ($('sidebar-search')?.value || '').trim().toLowerCase();
+      const contacts = profilesCache.filter(canShowDM).filter(person => {
+        const label = getNickname(currentProfile?.email, person);
+        return !query || label.toLowerCase().includes(query) || (person.email || '').toLowerCase().includes(query);
+      });
+      if (!contacts.length) dmList.appendChild(emptyText(query ? 'No matching people' : 'No direct messages'));
+      contacts.forEach((person) => {
+        const item = document.createElement('div');
+        item.className = `channel-item${currentDMOther?.id === person.id && currentChannelType === 'dm' ? ' active' : ''}`;
+        item.tabIndex = 0; item.setAttribute('role', 'button');
+        const icon = document.createElement('span'); icon.className = 'channel-icon'; icon.textContent = '✉';
+        const label = document.createElement('span'); label.className = 'channel-title'; label.textContent = getNickname(currentProfile?.email, person);
+        item.append(icon, label);
+        const unread = Object.values(unreadCounts).length ? unreadCountsForContact(person.id) : 0;
+        if (unread > 0) { const badge = document.createElement('span'); badge.className = 'unread-badge'; badge.textContent = unread > 99 ? '99+' : String(unread); item.appendChild(badge); }
+        item.addEventListener('click', () => selectDM(person));
+        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDM(person); } });
+        dmList.appendChild(item);
+      });
+      const filteredGroups = (groups || []).filter(group => !query || (group.name || '').toLowerCase().includes(query));
+      if (!filteredGroups.length) gcList.appendChild(emptyText(query ? 'No matching groups' : 'No group chats'));
+      filteredGroups.forEach((group) => {
+        const item = document.createElement('div');
+        item.className = `channel-item${currentChannelId === group.id ? ' active' : ''}`;
+        item.tabIndex = 0; item.setAttribute('role', 'button');
+        const icon = document.createElement('span'); icon.className = 'channel-icon'; icon.textContent = '♧';
+        const label = document.createElement('span'); label.className = 'channel-title'; label.textContent = group.name || 'Group chat';
+        item.append(icon, label);
+        const unread = Number(unreadCounts[group.id] || 0);
+        if (unread > 0) { const badge = document.createElement('span'); badge.className = 'unread-badge'; badge.textContent = unread > 99 ? '99+' : String(unread); item.appendChild(badge); }
+        item.addEventListener('click', () => selectGroup(group));
+        item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectGroup(group); } });
+        gcList.appendChild(item);
+      });
+    }
+    function unreadCountsForContact(contactId) {
+      // Direct-message conversation IDs are resolved by the RPC and aren't cached as a contact mapping,
+      // so the count remains on the conversation until opened; group counters are rendered directly.
+      return 0;
+    }
+    function emptyText(text) { const el = document.createElement('div'); el.className = 'empty-list'; el.textContent = text; return el; }
+    function getNickname(ownerEmail, otherProfile) {
+      if (!otherProfile) return '';
+      return nicknamesDB[otherProfile.id] || otherProfile.display_name || otherProfile.email;
+    }
+    function setChatStatus(text) { $('chat-status').textContent = text || ''; }
+
+    async function selectDM(otherProfile) {
+      if (!currentProfile || !otherProfile) return;
+      if (!canShowDM(otherProfile)) { alert(restrictedMessage); return; }
+      setChatStatus('Connecting…');
+      const { data: conversationId, error } = await supabase.rpc('get_or_create_dm', { other_user_id: otherProfile.id });
+      if (error || !conversationId) { setChatStatus(''); alert(error?.message || restrictedMessage); return; }
+      currentDMOther = otherProfile;
+      await activateChannel(conversationId, `💬 ${getNickname(currentProfile.email, otherProfile)}`, 'dm');
+    }
+
+    async function selectGroup(group) {
+      currentDMOther = null;
+      await activateChannel(group.id, `👥 ${group.name}`, 'group');
+    }
+
+    async function activateChannel(channelId, title, type) {
+      currentChannelId = channelId;
+      currentChannelType = type;
+      unreadCounts[channelId] = 0;
+      $('current-channel-name').textContent = title;
+      $('edit-name-btn').style.display = type === 'dm' ? 'inline-block' : 'none';
+      $('message-input').disabled = false;
+      $('send-btn').disabled = false;
+      $('attach-media-btn').disabled = false; $('media-file-input').disabled = false;
+      $('messages-container').replaceChildren(makeWelcome('Loading messages…'));
+      await refreshSidebar();
+      if (activeMessageChannel) supabase.removeChannel(activeMessageChannel);
+      const requestedChannelId = channelId;
+      activeMessageChannel = supabase.channel(`messages-${channelId}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${channelId}`
+        }, () => { if (currentChannelId === requestedChannelId) void loadMessages(requestedChannelId); })
+        .subscribe((status) => {
+          if (currentChannelId !== requestedChannelId) return;
+          if (status === 'SUBSCRIBED') { setChatStatus('Live'); void loadMessages(requestedChannelId); }
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setChatStatus('Reconnecting…');
+          else if (status === 'CLOSED') setChatStatus('Disconnected');
+        });
+    }
+
+    const renderingMessageIds = new Set();
+
+    async function loadMessages(channelId) {
+      if (!authUser || currentChannelId !== channelId) return;
+      const { data, error } = await supabase.from('messages')
+        .select('id,conversation_id,sender_id,text,created_at')
+        .eq('conversation_id', channelId).order('created_at', { ascending: true }).limit(500);
+      if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
+      if (currentChannelId !== channelId) return;
+
+      const container = $('messages-container');
+      const hadMessages = !!container.querySelector('.message');
+      const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      // Do not rebuild the conversation on every Realtime event: replacing all message
+      // nodes resets the user's reading position and makes the chat jump to the top.
+      if (!hadMessages) container.replaceChildren();
+
+      if (!data?.length) {
+        if (!container.querySelector('.message') && !container.querySelector('.welcome')) {
+          container.appendChild(makeWelcome('No messages yet. Say hello!'));
+        }
+        return;
+      }
+
+      const welcome = container.querySelector('.welcome');
+      if (welcome) welcome.remove();
+      for (const msg of data) {
+        if (currentChannelId !== channelId) return;
+        const selector = `[data-message-id="${CSS.escape(String(msg.id))}"]`;
+        if (container.querySelector(selector) || renderingMessageIds.has(String(msg.id))) continue;
+        renderingMessageIds.add(String(msg.id));
+        try {
+          await renderMessage(msg, container);
+        } catch (renderError) {
+          console.error('Could not render message:', renderError);
+        } finally {
+          renderingMessageIds.delete(String(msg.id));
+        }
+      }
+
+      requestAnimationFrame(() => {
+        if (currentChannelId !== channelId) return;
+        // Only auto-scroll on the first load or if the reader was already at the bottom.
+        if (!hadMessages || wasNearBottom) container.scrollTop = container.scrollHeight;
+      });
+    }
+
+    function parseMediaMessage(raw) {
+      if (!raw || !raw.startsWith(MEDIA_PREFIX)) return null;
+      try { return JSON.parse(raw.slice(MEDIA_PREFIX.length)); } catch { return null; }
+    }
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(Number(bytes))) return '';
+      const n = Number(bytes);
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function renderMessage(msg, container) {
+      const isMe = msg.sender_id === authUser.id;
+      const sender = profilesCache.find((profile) => profile.id === msg.sender_id);
+      let senderName = isMe ? 'You' : (sender?.display_name || sender?.email || 'Member');
+      if (!isMe && currentChannelType === 'dm' && sender && currentDMOther?.id === sender.id) {
+        senderName = getNickname(currentProfile?.email, sender);
+      }
+      const wrapper = document.createElement('div');
+      wrapper.className = `message ${isMe ? 'sent' : 'received'}`;
+      wrapper.dataset.messageId = String(msg.id);
+      const senderEl = document.createElement('div'); senderEl.className = 'msg-sender'; senderEl.textContent = senderName;
+      const body = document.createElement('div');
+      const media = parseMediaMessage(msg.text);
+      if (media?.path) {
+        const card = document.createElement('div'); card.className = 'media-attachment';
+        const { data: signedData, error: signedError } = await supabase.storage.from('ccconnect-media').createSignedUrl(media.path, 3600);
+        if (!signedError && signedData?.signedUrl) {
+          const url = signedData.signedUrl;
+          if ((media.mime || '').startsWith('image/')) {
+            const img = document.createElement('img'); img.className = 'media-image'; img.src = url; img.alt = media.name || 'Shared image'; img.loading = 'lazy';
+            img.onerror = () => { img.replaceWith(makeMediaLink(url, media.name || 'Open image')); };
+            card.appendChild(img);
+          } else if ((media.mime || '').startsWith('video/')) {
+            const video = document.createElement('video'); video.className = 'media-video'; video.controls = true; video.preload = 'metadata'; video.src = url; card.appendChild(video);
+          } else if ((media.mime || '').startsWith('audio/')) {
+            const audio = document.createElement('audio'); audio.className = 'media-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; card.appendChild(audio);
+          } else {
+            card.appendChild(makeMediaLink(url, `↧  ${media.name || 'Download attachment'}`));
+          }
+          const meta = document.createElement('div'); meta.className = 'media-meta'; meta.textContent = `${media.name || 'Attachment'}${media.size ? ` · ${formatBytes(media.size)}` : ''}`; card.appendChild(meta);
+        } else {
+          card.textContent = `Attachment unavailable: ${media.name || 'file'} (it may have been removed or access is restricted).`;
+        }
+        body.appendChild(card);
+      } else {
+        body.textContent = msg.text;
+      }
+      const time = document.createElement('div'); time.className = 'msg-time';
+      if (msg.created_at) {
+        const date = new Date(msg.created_at);
+        time.textContent = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        time.title = date.toLocaleString();
+      }
+      wrapper.append(senderEl, body, time); container.appendChild(wrapper);
+    }
+
+    function makeMediaLink(url, label) {
+      const link = document.createElement('a'); link.className = 'media-file-link'; link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = label;
+      return link;
+    }
+
+    function makeWelcome(text) { const el = document.createElement('div'); el.className = 'welcome'; el.textContent = text; return el; }
+
+    async function sendMessage(event) {
+      event?.preventDefault();
+      const input = $('message-input'); const text = input.value.trim();
+      if (!text || !currentChannelId || !authUser) return;
+      const channelId = currentChannelId;
+      $('send-btn').disabled = true;
+      try {
+        const { error } = await supabase.from('messages').insert({ conversation_id: channelId, sender_id: authUser.id, text });
+        if (error) throw error;
+        input.value = '';
+        input.focus();
+      } catch (error) {
+        alert(`Message could not be sent: ${error.message || 'Please try again.'}`);
+      } finally {
+        $('send-btn').disabled = !currentChannelId;
+      }
+    }
+
+    async function uploadSelectedMedia(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      event.target.value = '';
+      if (!authUser || !currentChannelId) { alert('Open a conversation before attaching a file.'); return; }
+      const allowedTypes = new Set([
+        'image/jpeg','image/png','image/gif','image/webp','image/avif',
+        'video/mp4','video/webm','audio/mpeg','audio/mp4','audio/ogg','audio/wav','audio/webm',
+        'application/pdf','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ]);
+      if (!allowedTypes.has(file.type)) { alert('That file type is not supported. Use a photo, MP4/WebM video, supported audio, PDF, TXT, DOC or DOCX.'); return; }
+      if (file.size > 25 * 1024 * 1024) { alert('Files must be 25 MB or smaller.'); return; }
+      const channelId = currentChannelId;
+      const btn = $('attach-media-btn'); btn.disabled = true; btn.textContent = '…';
+      setChatStatus('Uploading attachment…');
+      const safeName = file.name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-100) || 'attachment';
+      const path = `${channelId}/${authUser.id}/${crypto.randomUUID()}-${safeName}`;
+      try {
+        const { error: uploadError } = await supabase.storage.from('ccconnect-media').upload(path, file, {
+          cacheControl: '3600', upsert: false, contentType: file.type
+        });
+        if (uploadError) throw uploadError;
+        const payload = `${MEDIA_PREFIX}${JSON.stringify({ path, name: file.name, mime: file.type, size: file.size })}`;
+        const { error: messageError } = await supabase.from('messages').insert({ conversation_id: channelId, sender_id: authUser.id, text: payload });
+        if (messageError) {
+          await supabase.storage.from('ccconnect-media').remove([path]);
+          throw messageError;
+        }
+        if (currentChannelId === channelId) setChatStatus('Live');
+      } catch (error) {
+        console.error('Media upload failed:', error);
+        alert(`Attachment could not be sent: ${error.message || 'Please try again.'}`);
+        if (currentChannelId === channelId) setChatStatus('Attachment failed');
+      } finally {
+        btn.disabled = !currentChannelId; btn.textContent = '＋';
+      }
+    }
+
+    function subscribeSidebar() {
+      if (sidebarChannel) supabase.removeChannel(sidebarChannel);
+      sidebarChannel = supabase.channel('ccconnect-sidebar')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => { void refreshSidebar(); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_members' }, () => { void refreshSidebar(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ({ new: message }) => handleIncomingMessage(message))
+        .subscribe((status) => { if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Sidebar realtime status:', status); });
+    }
+
+    function handleIncomingMessage(message) {
+      if (!message || !authUser || message.sender_id === authUser.id) return;
+      const isDifferentConversation = message.conversation_id !== currentChannelId;
+      if (isDifferentConversation) {
+        unreadCounts[message.conversation_id] = Number(unreadCounts[message.conversation_id] || 0) + 1;
+        renderSidebar(groupsCache);
+      }
+      if (!isDifferentConversation && document.visibilityState === 'visible') return;
+      const person = profilesCache.find(p => p.id === message.sender_id);
+      const senderName = person ? (person.display_name || person.email) : 'New message';
+      const raw = String(message.text || '');
+      const media = parseMediaMessage(raw);
+      const preview = media ? `Sent an attachment${media.name ? `: ${media.name}` : ''}` : raw.slice(0, 140);
+      showToast(`${senderName}: ${preview}`);
+      if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const note = new Notification(`CCConnect · ${senderName}`, { body: preview || 'New message', tag: `ccconnect-${message.conversation_id}` });
+          note.onclick = () => { window.focus(); note.close(); };
+        } catch (error) { console.warn('Browser notification could not be shown:', error); }
+      }
+    }
+
+    function showToast(message) {
+      let toast = $('app-toast');
+      if (!toast) { toast = document.createElement('div'); toast.id = 'app-toast'; toast.setAttribute('role', 'status'); document.body.appendChild(toast); }
+      toast.textContent = message; toast.style.display = 'block';
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 5000);
+    }
+
+    async function toggleNotifications() {
+      if (!('Notification' in window)) { alert('This browser does not support desktop notifications.'); return; }
+      if (notificationsEnabled && Notification.permission === 'granted') {
+        notificationsEnabled = false;
+        localStorage.setItem('ccconnect_notifications_enabled', 'false');
+        updateNotificationsButton();
+        setChatStatus('Notifications off');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Notifications are blocked for this site. Use your browser’s site settings to allow them, then try again.');
+        return;
+      }
+      let permission = Notification.permission;
+      if (permission !== 'granted') permission = await Notification.requestPermission();
+      notificationsEnabled = permission === 'granted';
+      localStorage.setItem('ccconnect_notifications_enabled', String(notificationsEnabled));
+      updateNotificationsButton();
+      setChatStatus(notificationsEnabled ? 'Notifications on' : 'Notifications not enabled');
+      if (!notificationsEnabled && permission !== 'granted') alert('Browser notifications were not enabled. You can allow them in the browser address-bar site settings.');
+    }
+
+    function updateNotificationsButton() {
+      const button = $('notifications-toggle-btn');
+      if (!button) return;
+      const supported = 'Notification' in window;
+      if (!supported) { button.textContent = '🔕 Notifications unavailable'; button.disabled = true; return; }
+      const active = notificationsEnabled && Notification.permission === 'granted';
+      button.textContent = active ? '🔔 Notifications on' : '🔕 Enable notifications';
+      button.title = active ? 'Turn browser notifications off' : 'Allow browser notifications while CCConnect is open';
+    }
+
+    async function restorePopupConversation() {
+      const channelId = popupParams.get('conversation');
+      const type = popupParams.get('type');
+      const title = popupParams.get('name') || 'Conversation';
+      const otherId = popupParams.get('other');
+      if (!channelId || !['dm','group'].includes(type)) {
+        $('messages-container').replaceChildren(makeWelcome('Open a conversation in the main CCConnect window, then choose Pop-out.'));
+        $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+        return;
+      }
+      const { data: membership, error } = await supabase.from('conversation_members')
+        .select('conversation_id').eq('conversation_id', channelId).eq('user_id', authUser.id).maybeSingle();
+      if (error || !membership) {
+        $('messages-container').replaceChildren(makeWelcome('You do not have access to this conversation. Open it from your main CCConnect window.'));
+        $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+        return;
+      }
+      if (type === 'dm') {
+        currentDMOther = profilesCache.find(p => p.id === otherId) || null;
+        if (currentDMOther && !canShowDM(currentDMOther)) {
+          $('messages-container').replaceChildren(makeWelcome('This direct message is not available for this account.'));
+          $('message-input').disabled = true; $('send-btn').disabled = true; $('attach-media-btn').disabled = true; $('media-file-input').disabled = true;
+          return;
+        }
+      } else { currentDMOther = null; }
+      await activateChannel(channelId, title, type);
+    }
+
+    function openGCModal() {
+      if (!currentProfile?.is_admin) { alert(ADMIN_LABEL); return; }
+      const container = $('member-checkboxes'); container.replaceChildren();
+      profilesCache.filter((p) => p.id !== authUser.id && !p.dm_admin_only).forEach((profile) => {
+        const label = document.createElement('label'); label.className = 'member-option';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.value = profile.id;
+        const name = document.createElement('span'); name.textContent = profile.display_name || profile.email;
+        label.append(input, name); container.appendChild(label);
+      });
+      $('gc-name-input').value = ''; $('gc-modal').style.display = 'flex'; $('gc-name-input').focus();
+    }
+    function closeGCModal() { $('gc-modal').style.display = 'none'; $('gc-name-input').value = ''; }
+
+    async function createGroupChat() {
+      if (!currentProfile?.is_admin) { alert(ADMIN_LABEL); return; }
+      const name = $('gc-name-input').value.trim();
+      if (!name) { alert('Please enter a group name.'); return; }
+      const selected = [...document.querySelectorAll('#member-checkboxes input:checked')].map((el) => el.value);
+      if (!selected.length) { alert('Select at least one other member.'); return; }
+      const button = $('gc-create-btn'); button.disabled = true; button.textContent = 'Creating…';
+      try {
+        const { data: group, error: groupError } = await supabase.from('conversations')
+          .insert({ type: 'group', name, created_by: authUser.id }).select('id,name').single();
+        if (groupError) throw groupError;
+        const members = [...new Set([authUser.id, ...selected])].map((user_id) => ({ conversation_id: group.id, user_id }));
+        const { error: membersError } = await supabase.from('conversation_members').insert(members);
+        if (membersError) throw membersError;
+        closeGCModal();
+        await refreshSidebar();
+        await selectGroup(group);
+      } catch (error) {
+        alert(`Could not create the group: ${error.message || 'Check your Supabase policies.'}`);
+      } finally {
+        button.disabled = false; button.textContent = 'Create';
+      }
+    }
+
+    function openNicknameModal() {
+      if (currentChannelType !== 'dm' || !currentDMOther) return;
+      $('nickname-input').value = getNickname(currentProfile.email, currentDMOther);
+      $('nickname-modal').style.display = 'flex'; $('nickname-input').focus();
+    }
+    function closeNicknameModal() { $('nickname-modal').style.display = 'none'; }
+
+    async function loadContactNicknames() {
+      nicknamesDB = {};
+      if (!authUser) return;
+      const { data, error } = await supabase.from('contact_nicknames')
+        .select('contact_id,nickname').eq('owner_id', authUser.id);
+      if (error) { console.warn('Could not load saved nicknames:', error.message); return; }
+      (data || []).forEach(row => { nicknamesDB[row.contact_id] = row.nickname; });
+    }
+
+    async function saveNickname() {
+      const name = $('nickname-input').value.trim();
+      if (!name || !currentDMOther || !authUser) return;
+      const button = $('nick-save-btn'); button.disabled = true; button.textContent = 'Saving…';
+      try {
+        const { error } = await supabase.from('contact_nicknames').upsert({
+          owner_id: authUser.id, contact_id: currentDMOther.id, nickname: name, updated_at: new Date().toISOString()
+        }, { onConflict: 'owner_id,contact_id' });
+        if (error) throw error;
+        nicknamesDB[currentDMOther.id] = name;
+        closeNicknameModal();
+        $('current-channel-name').textContent = `💬 ${name}`;
+        await refreshSidebar();
+        setChatStatus('Nickname saved');
+      } catch (error) {
+        alert(`Nickname could not be saved: ${error.message || 'Please try again.'}`);
+      } finally {
+        button.disabled = false; button.textContent = 'Save';
+      }
+    }
+
+    async function togglePiP() {
+      if (!currentChannelId || !currentChannelType) {
+        alert('Open a conversation first, then pop it out.');
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.set('ccpopup', '1');
+      url.searchParams.set('conversation', currentChannelId);
+      url.searchParams.set('type', currentChannelType);
+      url.searchParams.set('name', $('current-channel-name').textContent || 'Conversation');
+      if (currentDMOther?.id) url.searchParams.set('other', currentDMOther.id);
+      else url.searchParams.delete('other');
+      const popup = window.open(url.toString(), `ccconnect-chat-${currentChannelId}`, 'popup=yes,width=520,height=720,resizable=yes,scrollbars=no');
+      if (!popup) {
+        alert('Your browser blocked the pop-out window. Allow pop-ups for your CCConnect site, then click Pop-out again.');
+        return;
+      }
+      popup.focus();
+    }
+  </script>
+</body>
+</html>
