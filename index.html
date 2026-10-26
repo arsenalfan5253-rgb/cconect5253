@@ -337,6 +337,7 @@ body.popup-mode .message { max-width:92%; }
     if (isPopupWindow) document.body.classList.add('popup-mode');
     let notificationsEnabled = localStorage.getItem('ccconnect_notifications_enabled') === 'true';
     let toastTimer = null;
+    let messageSyncTimer = null;
 
     const $ = (id) => document.getElementById(id);
     const ADMIN_LABEL = 'Group creation is limited to the admin account.';
@@ -489,6 +490,8 @@ body.popup-mode .message { max-width:92%; }
     function resetAppUI() {
       if (activeMessageChannel && supabase) supabase.removeChannel(activeMessageChannel);
       if (sidebarChannel && supabase) supabase.removeChannel(sidebarChannel);
+      if (messageSyncTimer) clearInterval(messageSyncTimer);
+      messageSyncTimer = null;
       activeMessageChannel = null; sidebarChannel = null;
       authUser = null; currentProfile = null; currentChannelId = null; currentDMOther = null; currentChannelType = null; profilesCache = [];
       $('app-screen').style.display = 'none';
@@ -615,9 +618,16 @@ body.popup-mode .message { max-width:92%; }
         .subscribe((status) => {
           if (currentChannelId !== requestedChannelId) return;
           if (status === 'SUBSCRIBED') { setChatStatus('Live'); void loadMessages(requestedChannelId); }
-          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setChatStatus('Reconnecting…');
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setChatStatus('Syncing messages…');
           else if (status === 'CLOSED') setChatStatus('Disconnected');
         });
+
+      // Realtime is best-effort; this low-frequency incremental sync makes sure
+      // new messages also reach the other open browser if a realtime event is missed.
+      if (messageSyncTimer) clearInterval(messageSyncTimer);
+      messageSyncTimer = setInterval(() => {
+        if (currentChannelId === requestedChannelId) void syncRecentMessages(requestedChannelId);
+      }, 3000);
     }
 
     async function loadMessages(channelId) {
@@ -654,6 +664,41 @@ body.popup-mode .message { max-width:92%; }
       }
 
       // Only follow new messages if the reader was already at the bottom.
+      if (unseenMessages.length && nearBottom && currentChannelId === channelId) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    async function syncRecentMessages(channelId) {
+      if (!authUser || !channelId || currentChannelId !== channelId ||
+          renderedMessagesChannelId !== channelId) return;
+
+      const { data, error } = await supabase.from('messages')
+        .select('id,conversation_id,sender_id,text,created_at')
+        .eq('conversation_id', channelId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.warn('Fallback message sync failed:', error.message);
+        return;
+      }
+      if (currentChannelId !== channelId) return;
+
+      const container = $('messages-container');
+      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      if (container.querySelector('.welcome')) container.replaceChildren();
+
+      const unseenMessages = (data || []).reverse()
+        .filter((msg) => !renderedMessageIds.has(String(msg.id)));
+
+      for (const msg of unseenMessages) {
+        if (currentChannelId !== channelId) return;
+        renderedMessageIds.add(String(msg.id));
+        await renderMessage(msg, container);
+      }
+
+      // Avoid moving someone who is reading older messages.
       if (unseenMessages.length && nearBottom && currentChannelId === channelId) {
         container.scrollTop = container.scrollHeight;
       }
@@ -735,6 +780,9 @@ body.popup-mode .message { max-width:92%; }
         if (error) throw error;
         input.value = '';
         input.focus();
+        // Confirm the new row appears for this sender immediately; the other
+        // participant's polling fallback will pick it up within a few seconds.
+        void syncRecentMessages(channelId);
       } catch (error) {
         alert(`Message could not be sent: ${error.message || 'Please try again.'}`);
       } finally {
