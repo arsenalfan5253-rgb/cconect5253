@@ -258,7 +258,6 @@ alter table public.contact_nicknames enable row level security;
 drop policy if exists profiles_read_signed_in on public.profiles;
 drop policy if exists profiles_update_own_display_name on public.profiles;
 drop policy if exists profiles_read_allowed_family on public.profiles;
-drop policy if exists profiles_update_own_display_name on public.profiles;
 
 create policy profiles_read_allowed_family
 on public.profiles for select to authenticated
@@ -283,7 +282,8 @@ with check (id = (select auth.uid()));
 
 -- Prevent a normal signed-in user from promoting themselves to admin or changing
 -- the restriction flag; only display_name remains client-updatable.
-revoke update on public.profiles from anon, authenticated;
+revoke update on public.profiles from public, anon, authenticated;
+revoke update (id, email, is_admin, dm_admin_only, created_at) on public.profiles from public, anon, authenticated;
 grant update (display_name) on public.profiles to authenticated;
 
 -- Membership decisions enforce privacy even if a user guesses a conversation UUID.
