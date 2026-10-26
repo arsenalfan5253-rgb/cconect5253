@@ -25,6 +25,8 @@
     .auth-card button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: 600; transition: background .2s; }
     .auth-card button:hover { background: var(--accent-hover); }
     #auth-error { color: #fca5a5; margin: 14px 0 0; font-size: .88rem; line-height: 1.4; }
+    .auth-notice { color: #c4b5fd; margin: 14px 0 0; font-size: .9rem; line-height: 1.5; }
+    .auth-footnote { color: var(--text-muted); font-size: .8rem !important; margin: 12px 0 0 !important; line-height: 1.5; }
     #app-screen { display: none; width: 100%; height: 100%; min-height: 0; }
     .sidebar { flex: 0 0 var(--sidebar-width); max-width: 45%; background: rgba(15,23,42,.95); border-right: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; min-height: 0; }
     .sidebar-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -242,11 +244,12 @@ body.popup-mode .message { max-width:92%; }
   <div id="auth-screen">
     <div class="auth-card">
       <h1>ccconnect</h1>
-      <p>Secure Portal</p>
-      <input type="email" id="email-input" placeholder="Email Address" autocomplete="username" required>
-      <input type="password" id="passcode-input" placeholder="Password" autocomplete="current-password" required>
-      <button id="login-btn">Sign In</button>
+      <p>Private family chat</p>
+      <input type="email" id="email-input" placeholder="Whitelisted email address" autocomplete="email" inputmode="email" required>
+      <button id="login-btn">Send sign-in link</button>
+      <p class="auth-notice" id="auth-notice" aria-live="polite" hidden></p>
       <p id="auth-error" role="alert" aria-live="polite" hidden></p>
+      <p class="auth-footnote">No password needed. A secure sign-in link will be emailed to you.</p>
     </div>
   </div>
 
@@ -339,10 +342,21 @@ body.popup-mode .message { max-width:92%; }
     const ADMIN_LABEL = 'Group creation is limited to the admin account.';
     const restrictedMessage = 'This direct message is not available for this account.';
 
+    // Client-side allowlist improves the UX. Supabase RLS below the UI must enforce the same rules.
+    const ACCESS_USERS = Object.freeze({
+      'musti2152@gmail.com': { name: 'Mustafa', isAdmin: true, restricted: false },
+      'mchiba@gmail.com': { name: 'Abba', isAdmin: false, restricted: false },
+      'sschiba786@gmail.com': { name: 'Mom', isAdmin: false, restricted: false },
+      'abdulqadir@gmail.com': { name: 'Abdulqadir', isAdmin: false, restricted: false },
+      'ajaby786@gmail.com': { name: 'Ajab', isAdmin: false, restricted: false },
+      'zahrahalai296@gmail.com': { name: 'Zahra', isAdmin: false, restricted: true },
+      'arsenalfan5253@gmail.com': { name: 'ArsenalFan', isAdmin: false, restricted: true }
+    });
+
     window.addEventListener('DOMContentLoaded', async () => {
       $('login-btn').addEventListener('click', handleLogin);
       $('email-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
-      $('passcode-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+      $('email-input').addEventListener('input', () => { showAuthError(''); showAuthMessage(''); });
       $('logout-btn').addEventListener('click', handleLogout);
       $('message-form').addEventListener('submit', sendMessage);
       $('admin-gc-btn').addEventListener('click', openGCModal);
@@ -380,35 +394,63 @@ body.popup-mode .message { max-width:92%; }
 
     async function handleLogin() {
       if (!supabase) {
-        showAuthError('Setup required: configure Supabase in index.html and run the database setup SQL.');
+        showAuthError('Setup required: configure Supabase in index.html and run the Supabase setup SQL.');
         return;
       }
       const email = $('email-input').value.trim().toLowerCase();
-      const password = $('passcode-input').value;
-      if (!email || !password) { showAuthError('Enter your email and password.'); return; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showAuthError('Enter a valid email address.');
+        return;
+      }
+      if (!ACCESS_USERS[email]) {
+        showAuthError('That email is not on CCConnect’s family access list.');
+        return;
+      }
       const button = $('login-btn');
       button.disabled = true;
-      button.textContent = 'Signing in…';
+      button.textContent = 'Sending link…';
       showAuthError('');
+      showAuthMessage('');
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: window.location.origin + window.location.pathname
+          }
+        });
         if (error) throw error;
-        await startApp(data.user);
+        showAuthMessage('Sign-in link sent to ' + email + '. Open the email and click the link to sign in.');
       } catch (error) {
-        showAuthError(error?.message?.includes('Invalid login credentials') ? 'Email or password is incorrect.' : (error?.message || 'Sign-in failed. Check your connection and Supabase setup.'));
+        showAuthError(error?.message || 'Could not send the sign-in link. Check the email and Supabase Auth setup.');
       } finally {
         button.disabled = false;
-        button.textContent = 'Sign In';
+        button.textContent = 'Send sign-in link';
       }
+    }
+
+    function showAuthMessage(message) {
+      const el = $('auth-notice');
+      if (!el) return;
+      el.textContent = message;
+      el.hidden = !message;
     }
 
     async function startApp(user) {
       if (appStarting) return;
       appStarting = true;
       try {
+        const email = String(user?.email || '').trim().toLowerCase();
+        const access = ACCESS_USERS[email];
+        if (!access) throw new Error('This account is not on CCConnect’s family access list. Sign out and use an approved email.');
         const { data: profile, error } = await supabase.from('profiles')
           .select('id,email,display_name,is_admin,dm_admin_only').eq('id', user.id).single();
-        if (error || !profile) throw new Error('Your profile was not created. Run the setup SQL and make sure this account exists in Supabase Authentication.');
+        if (error || !profile) throw new Error('Your family profile is missing. Invite this email in Supabase Authentication, then run SUPABASE_SETUP.sql.');
+        if (String(profile.email || '').trim().toLowerCase() !== email ||
+            Boolean(profile.is_admin) !== access.isAdmin ||
+            Boolean(profile.dm_admin_only) !== access.restricted) {
+          throw new Error('Supabase permissions are not configured for this account yet. Run SUPABASE_SETUP.sql, then refresh.');
+        }
         authUser = user;
         currentProfile = profile;
         await loadContactNicknames();
@@ -444,7 +486,8 @@ body.popup-mode .message { max-width:92%; }
       authUser = null; currentProfile = null; currentChannelId = null; currentDMOther = null; currentChannelType = null; profilesCache = [];
       $('app-screen').style.display = 'none';
       $('auth-screen').style.display = 'flex';
-      $('email-input').value = ''; $('passcode-input').value = '';
+      $('email-input').value = '';
+      showAuthMessage(''); showAuthError('');
       $('current-channel-name').textContent = 'Select a conversation';
       $('messages-container').replaceChildren(makeWelcome('Choose a conversation on the left to start messaging.'));
       $('chat-status').textContent = '';
@@ -460,7 +503,7 @@ body.popup-mode .message { max-width:92%; }
       const { data: profiles, error: profileError } = await supabase.from('profiles')
         .select('id,email,display_name,is_admin,dm_admin_only').order('display_name', { ascending: true });
       if (profileError) { setChatStatus('Could not load users'); console.error(profileError); return; }
-      profilesCache = profiles || [];
+      profilesCache = (profiles || []).filter((profile) => ACCESS_USERS[String(profile.email || '').trim().toLowerCase()]);
       const { data: groups, error: groupError } = await supabase.from('conversations')
         .select('id,name,created_at').eq('type', 'group').order('created_at', { ascending: true });
       if (groupError) { setChatStatus('Could not load groups'); console.error(groupError); return; }
@@ -519,9 +562,14 @@ body.popup-mode .message { max-width:92%; }
       return 0;
     }
     function emptyText(text) { const el = document.createElement('div'); el.className = 'empty-list'; el.textContent = text; return el; }
+    function nicknameStorageKey(otherProfile) {
+      return 'ccconnect:nickname:' + (authUser?.id || 'guest') + ':' + otherProfile.id;
+    }
+
     function getNickname(ownerEmail, otherProfile) {
       if (!otherProfile) return '';
-      return nicknamesDB[otherProfile.id] || otherProfile.display_name || otherProfile.email;
+      const localNickname = authUser ? localStorage.getItem(nicknameStorageKey(otherProfile)) : null;
+      return localNickname || nicknamesDB[otherProfile.id] || otherProfile.display_name || otherProfile.email;
     }
     function setChatStatus(text) { $('chat-status').textContent = text || ''; }
 
@@ -886,6 +934,7 @@ body.popup-mode .message { max-width:92%; }
         }, { onConflict: 'owner_id,contact_id' });
         if (error) throw error;
         nicknamesDB[currentDMOther.id] = name;
+        localStorage.setItem(nicknameStorageKey(currentDMOther), name);
         closeNicknameModal();
         $('current-channel-name').textContent = `💬 ${name}`;
         await refreshSidebar();
