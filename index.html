@@ -461,7 +461,14 @@ body.popup-mode .message { max-width:92%; }
         showAuthError('');
         await refreshSidebar();
         subscribeSidebar();
-        if (isPopupWindow) await restorePopupConversation();
+        if (isPopupWindow) {
+          await restorePopupConversation();
+        } else if (profile.dm_admin_only) {
+          // Restricted accounts land directly in their only allowed conversation: the administrator.
+          const adminProfile = profilesCache.find((p) => p.is_admin);
+          if (adminProfile) await selectDM(adminProfile);
+          else throw new Error('The administrator profile is not set up yet. Run SUPABASE_SETUP.sql and sign in again.');
+        }
       } catch (error) {
         showAuthError(error.message || 'Could not load your profile.');
         $('auth-screen').style.display = 'flex';
@@ -929,16 +936,17 @@ body.popup-mode .message { max-width:92%; }
       if (!name || !currentDMOther || !authUser) return;
       const button = $('nick-save-btn'); button.disabled = true; button.textContent = 'Saving…';
       try {
+        // Save locally first as requested; Supabase is a cross-device backup.
+        localStorage.setItem(nicknameStorageKey(currentDMOther), name);
+        nicknamesDB[currentDMOther.id] = name;
         const { error } = await supabase.from('contact_nicknames').upsert({
           owner_id: authUser.id, contact_id: currentDMOther.id, nickname: name, updated_at: new Date().toISOString()
         }, { onConflict: 'owner_id,contact_id' });
-        if (error) throw error;
-        nicknamesDB[currentDMOther.id] = name;
-        localStorage.setItem(nicknameStorageKey(currentDMOther), name);
+        if (error) console.warn('Nickname saved on this browser; Supabase backup failed:', error.message);
         closeNicknameModal();
         $('current-channel-name').textContent = `💬 ${name}`;
         await refreshSidebar();
-        setChatStatus('Nickname saved');
+        setChatStatus(error ? 'Nickname saved on this browser' : 'Nickname saved');
       } catch (error) {
         alert(`Nickname could not be saved: ${error.message || 'Please try again.'}`);
       } finally {
