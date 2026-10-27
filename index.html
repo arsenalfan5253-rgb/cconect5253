@@ -205,6 +205,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #a69cff; outline-
 .channel-icon { display:inline-flex; flex:0 0 28px; height:28px; border-radius:9px; align-items:center; justify-content:center; background:rgba(124,108,255,.11); font-size:.85rem; }
 .channel-title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .unread-badge { display:inline-flex; align-items:center; justify-content:center; min-width:21px; height:21px; padding:0 6px; border-radius:999px; background:#8b7cff; color:#fff; font-size:.72rem; font-weight:800; margin-left:auto; }
+.notification-dot { display:inline-block; flex:0 0 8px; width:8px; height:8px; border-radius:50%; background:#ff4d67; margin-left:auto; box-shadow:0 0 0 2px rgba(255,77,103,.14); }
 .input-area { align-items:center; }
 .attach-media-btn { flex:0 0 44px; height:44px; padding:0 !important; border-radius:13px !important; font-size:1.45rem !important; line-height:1; background:#1a2440 !important; color:#dce3f6 !important; border:1px solid var(--line) !important; box-shadow:none !important; }
 .attach-media-btn:hover { background:#26345a !important; }
@@ -328,6 +329,7 @@ body.popup-mode .message { max-width:92%; }
     let nicknamesDB = {}; // contact_id -> nickname, loaded from Supabase for this signed-in user
     let groupsCache = [];
     let unreadCounts = {};
+    const unreadDMContacts = new Set();
     const MEDIA_PREFIX = 'CCMEDIA1:';
     const popupParams = new URLSearchParams(window.location.search);
     const isPopupWindow = popupParams.get('ccpopup') === '1';
@@ -494,8 +496,13 @@ body.popup-mode .message { max-width:92%; }
         const icon = document.createElement('span'); icon.className = 'channel-icon'; icon.textContent = '✉';
         const label = document.createElement('span'); label.className = 'channel-title'; label.textContent = getNickname(currentProfile?.email, person);
         item.append(icon, label);
-        const unread = Object.values(unreadCounts).length ? unreadCountsForContact(person.id) : 0;
-        if (unread > 0) { const badge = document.createElement('span'); badge.className = 'unread-badge'; badge.textContent = unread > 99 ? '99+' : String(unread); item.appendChild(badge); }
+        if (unreadDMContacts.has(person.id)) {
+          const dot = document.createElement('span');
+          dot.className = 'notification-dot';
+          dot.title = 'New message';
+          dot.setAttribute('aria-label', 'New message');
+          item.appendChild(dot);
+        }
         item.addEventListener('click', () => selectDM(person));
         item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDM(person); } });
         dmList.appendChild(item);
@@ -534,7 +541,9 @@ body.popup-mode .message { max-width:92%; }
       setChatStatus('Connecting…');
       const { data: conversationId, error } = await supabase.rpc('get_or_create_dm', { other_user_id: otherProfile.id });
       if (error || !conversationId) { setChatStatus(''); alert(error?.message || restrictedMessage); return; }
+      unreadDMContacts.delete(otherProfile.id);
       currentDMOther = otherProfile;
+      renderSidebar(groupsCache);
       await activateChannel(conversationId, `💬 ${getNickname(currentProfile.email, otherProfile)}`, 'dm');
     }
 
@@ -787,6 +796,10 @@ body.popup-mode .message { max-width:92%; }
       const isDifferentConversation = message.conversation_id !== currentChannelId;
       if (isDifferentConversation) {
         unreadCounts[message.conversation_id] = Number(unreadCounts[message.conversation_id] || 0) + 1;
+        // In a DM, the sender is the contact whose row should show the new-message dot.
+        if (!groupsCache.some(group => group.id === message.conversation_id)) {
+          unreadDMContacts.add(message.sender_id);
+        }
         renderSidebar(groupsCache);
       }
       if (!isDifferentConversation && document.visibilityState === 'visible') return;
