@@ -563,11 +563,6 @@ body.popup-mode .message { max-width:92%; }
       $('message-input').disabled = false;
       $('send-btn').disabled = false;
       $('attach-media-btn').disabled = false; $('media-file-input').disabled = false;
-      // A channel activation clears the message DOM, so reset the render cache too.
-      // Otherwise reopening the same DM can leave the chat blank because its message IDs
-      // are incorrectly treated as already rendered.
-      renderedMessageIds.clear();
-      renderedMessagesChannelId = null;
       $('messages-container').replaceChildren(makeWelcome('Loading messages…'));
       await refreshSidebar();
       if (activeMessageChannel) supabase.removeChannel(activeMessageChannel);
@@ -595,11 +590,9 @@ body.popup-mode .message { max-width:92%; }
       if (!authUser || currentChannelId !== channelId) return;
       const { data, error } = await supabase.from('messages')
         .select('id,conversation_id,sender_id,text,created_at')
-        .eq('conversation_id', channelId).order('created_at', { ascending: false }).limit(500);
+        .eq('conversation_id', channelId).order('created_at', { ascending: true }).limit(500);
       if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
       if (currentChannelId !== channelId) return;
-      // Fetch the newest 500 rows, then display them oldest-to-newest.
-      const messages = (data || []).slice().reverse();
 
       const container = $('messages-container');
       const firstLoadForChannel = renderedMessagesChannelId !== channelId;
@@ -612,13 +605,13 @@ body.popup-mode .message { max-width:92%; }
         container.replaceChildren();
       }
 
-      if (!messages.length) {
+      if (!data?.length) {
         if (!container.childElementCount) container.appendChild(makeWelcome('No messages yet. Say hello!'));
         return;
       }
 
       if (container.querySelector('.welcome')) container.replaceChildren();
-      const unseenMessages = messages.filter(msg => !renderedMessageIds.has(String(msg.id)));
+      const unseenMessages = data.filter(msg => !renderedMessageIds.has(String(msg.id)));
       for (const msg of unseenMessages) {
         if (currentChannelId !== channelId) return;
         // Mark before awaiting media rendering so simultaneous realtime events cannot duplicate it.
