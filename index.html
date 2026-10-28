@@ -557,6 +557,10 @@ body.popup-mode .message { max-width:92%; }
     async function activateChannel(channelId, title, type) {
       currentChannelId = channelId;
       currentChannelType = type;
+      // A conversation is re-rendered from Supabase whenever it is opened.
+      // Clear the previous DOM-ID cache so saved messages are not skipped.
+      renderedMessageIds.clear();
+      renderedMessagesChannelId = null;
       unreadCounts[channelId] = 0;
       $('current-channel-name').textContent = title;
       $('edit-name-btn').style.display = type === 'dm' ? 'inline-block' : 'none';
