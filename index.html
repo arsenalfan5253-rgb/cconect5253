@@ -594,10 +594,14 @@ body.popup-mode .message { max-width:92%; }
       if (!authUser || currentChannelId !== channelId) return;
       const { data, error } = await supabase.from('messages')
         .select('id,conversation_id,sender_id,text,created_at')
-        .eq('conversation_id', channelId).order('created_at', { ascending: true }).limit(500);
+        .eq('conversation_id', channelId)
+        .order('created_at', { ascending: false })
+        .limit(500);
       if (error) { setChatStatus('Could not load messages'); console.error(error); return; }
       if (currentChannelId !== channelId) return;
 
+      // Fetch the newest 500 messages, then render them in chronological order.
+      const messages = (data || []).reverse();
       const container = $('messages-container');
       const firstLoadForChannel = renderedMessagesChannelId !== channelId;
       const nearBottom = firstLoadForChannel ||
@@ -609,13 +613,13 @@ body.popup-mode .message { max-width:92%; }
         container.replaceChildren();
       }
 
-      if (!data?.length) {
+      if (!messages.length) {
         if (!container.childElementCount) container.appendChild(makeWelcome('No messages yet. Say hello!'));
         return;
       }
 
       if (container.querySelector('.welcome')) container.replaceChildren();
-      const unseenMessages = data.filter(msg => !renderedMessageIds.has(String(msg.id)));
+      const unseenMessages = messages.filter(msg => !renderedMessageIds.has(String(msg.id)));
       for (const msg of unseenMessages) {
         if (currentChannelId !== channelId) return;
         // Mark before awaiting media rendering so simultaneous realtime events cannot duplicate it.
